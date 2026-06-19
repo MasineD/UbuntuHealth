@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { User, Lock, Mail, Phone, Building2, ShieldCheck, Activity, LogOut, Eye, EyeOff, CheckCircle,AlertCircle,Loader2
 } from 'lucide-react';
+import Dashboard from './pages/dashboard';
 
 // Configure axios with baseURL and credentials to support HTTP-only cookies
 const api = axios.create({
@@ -153,6 +154,16 @@ function App() {
     );
   }
 
+  if (authMode === 'dashboard' && user) {
+    return (
+      <Dashboard 
+        user={user} 
+        onLogout={handleLogout} 
+        actionLoading={actionLoading} 
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 font-sans selection:bg-emerald-500 selection:text-slate-950 relative overflow-hidden">
       {/* Decorative Blur Spheres */}
@@ -191,7 +202,7 @@ function App() {
           </div>
         </div>
 
-        {/* Right Side: Auth Forms or Dashboard */}
+        {/* Right Side: Auth Forms */}
         <div className="md:col-span-7 p-8 md:p-12 flex flex-col justify-center bg-slate-900/30">
           
           {authMode !== 'dashboard' && (
@@ -408,70 +419,6 @@ function App() {
                   </button>
                 </form>
               )}
-
-            </div>
-          )}
-
-          {/* ===== AUTHENTICATED DASHBOARD VIEW ===== */}
-          {authMode === 'dashboard' && user && (
-            <div className="w-full max-w-lg mx-auto space-y-6">
-              
-              <div className="text-center md:text-left space-y-2">
-                <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-3 py-1 text-emerald-400 text-xs font-semibold">
-                  <CheckCircle className="h-3.5 w-3.5" />
-                  Authenticated Session
-                </div>
-                <h2 className="text-2xl font-bold tracking-tight text-white">
-                  Welcome to UbuntuHealth Portal
-                </h2>
-                <p className="text-slate-400 text-sm">
-                  You are logged in as a medical administrator.
-                </p>
-              </div>
-
-              {/* User Details Box */}
-              <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-6 space-y-4">
-                <div className="flex items-center gap-4 pb-4 border-b border-slate-800">
-                  <div className="h-12 w-12 rounded-full bg-slate-900 flex items-center justify-center text-lg font-bold border border-slate-700 text-emerald-400">
-                    {user.name ? user.name.split(' ').map(n=>n[0]).join('').toUpperCase() : 'MD'}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-white text-base leading-tight">{user.name}</h3>
-                    <p className="text-slate-400 text-xs">{user.email}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div className="space-y-1">
-                    <span className="text-xs text-slate-500">ADMINISTRATOR ID</span>
-                    <p className="font-mono text-slate-300 truncate">{user.id || 'N/A'}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <span className="text-xs text-slate-500">PORTAL ACCESS ROLE</span>
-                    <p className="font-semibold text-emerald-500">Super Administrator</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Dashboard Simulation Alert */}
-              <div className="bg-emerald-950/20 border border-emerald-500/20 rounded-2xl p-4 flex gap-3 text-sm text-emerald-300/90 leading-relaxed">
-                <ShieldCheck className="h-6 w-6 shrink-0 text-emerald-400" />
-                <p>
-                  <strong>API Connection Validated:</strong> Cookie authentication token has been successfully stored, read, and verified against the backend database.
-                </p>
-              </div>
-
-              {/* Logout & Action Buttons */}
-              <div className="flex gap-4">
-                <button
-                  onClick={handleLogout}
-                  disabled={actionLoading}
-                  className="flex-1 py-3 bg-slate-950 border border-slate-800 hover:bg-slate-900 text-slate-300 font-bold rounded-xl transition-all duration-300 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  <LogOut className="h-4 w-4 text-slate-400" />
-                  Sign Out
-                </button>
-              </div>
 
             </div>
           )}

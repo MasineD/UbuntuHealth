@@ -62,7 +62,7 @@ router.post('/login', async (req, res) => {
     const token = generateToken(userData.id);
     res.cookie('token', token, cookieOptions);
     
-    res.json({ user: { id: userData.id, name: userData.name, email: userData.email } });
+    res.json({ user: { id: userData.id, name: userData.fullname, email: userData.email, organization: userData.organization, facility_code: userData.facility_code } });
 });
 
 // ========== FIXED: Current user route - returns full user info ==========
