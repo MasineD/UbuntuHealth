@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { LayoutDashboard, Users, Clock, LogOut, Loader2, ShieldCheck, Bell, CheckCircle, User as UserIcon, Heart, Calendar, Activity, ClipboardList, MapPin, MessageSquare, Send, Plus } from 'lucide-react';
+import { LayoutDashboard, Users, Clock, LogOut, Loader2, ShieldCheck, Bell, CheckCircle, User as UserIcon, Heart, Calendar, Activity, ClipboardList, MapPin, MessageSquare, Send, Plus, X, AlertTriangle } from 'lucide-react';
 import { io } from 'socket.io-client';
 import ChatRoom from '../components/ChatRoom';
 
@@ -12,10 +12,85 @@ const api = axios.create({
   }
 });
 
-function ChwDashboard({ user, onLogout, actionLoading }) {
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'patients' | 'visits' | 'referrals'
+function ChwDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
+  const [activeTab, setActiveTab] = useState('visits'); // 'overview' | 'patients' | 'visits' | 'referrals'
   const [patients, setPatients] = useState([]);
   const [loadingPatients, setLoadingPatients] = useState(false);
+
+  // Profile Modal State
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileData, setProfileData] = useState(null);
+  const [profileForm, setProfileForm] = useState({
+    fullname: '',
+    gender: '',
+    email: '',
+    phone_number: '',
+    house_number: '',
+    surbub: '',
+    municipality: '',
+    city: ''
+  });
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState('');
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  const fetchProfile = async () => {
+    setProfileLoading(true);
+    setProfileError('');
+    try {
+      const res = await api.get('/auth/profile');
+      if (res.data && res.data.profile) {
+        setProfileData(res.data.profile);
+        setProfileForm({
+          fullname: res.data.profile.fullname || '',
+          gender: res.data.profile.gender || '',
+          email: res.data.profile.email || '',
+          phone_number: res.data.profile.phone_number || '',
+          house_number: res.data.profile.house_number || '',
+          surbub: res.data.profile.surbub || '',
+          municipality: res.data.profile.municipality || '',
+          city: res.data.profile.city || ''
+        });
+      }
+    } catch (err) {
+      setProfileError(err.response?.data?.message || 'Failed to load profile details');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isProfileModalOpen) {
+      fetchProfile();
+      setIsEditingProfile(false);
+      setProfileSuccess('');
+      setProfileError('');
+    }
+  }, [isProfileModalOpen]);
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setProfileSaving(true);
+    setProfileError('');
+    setProfileSuccess('');
+    try {
+      const res = await api.put('/auth/profile', profileForm);
+      if (res.data && res.data.profile) {
+        setProfileData(res.data.profile);
+        setProfileSuccess('Profile updated successfully!');
+        setIsEditingProfile(false);
+        if (onUserUpdate && res.data.user) {
+          onUserUpdate(res.data.user);
+        }
+      }
+    } catch (err) {
+      setProfileError(err.response?.data?.message || 'Failed to save profile changes');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   const [homeVisits, setHomeVisits] = useState([]);
 
@@ -332,8 +407,6 @@ function ChwDashboard({ user, onLogout, actionLoading }) {
   }, []);
 
   const sidebarItems = [
-    { id: 'overview', name: 'Overview', icon: LayoutDashboard },
-    { id: 'patients', name: 'Assigned Patients', icon: Users },
     { id: 'visits', name: 'Daily Visits', icon: ClipboardList },
     { id: 'referrals', name: 'Referrals', icon: Calendar },
     { id: 'chat', name: 'Chat Room', icon: MessageSquare }
@@ -381,6 +454,12 @@ function ChwDashboard({ user, onLogout, actionLoading }) {
                 <span className="inline-block bg-teal-500/10 text-teal-400 border border-teal-500/20 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
                   Health Worker
                 </span>
+                <button
+                  onClick={() => setIsProfileModalOpen(true)}
+                  className="mt-1.5 text-xs text-teal-400 hover:text-teal-300 font-semibold underline block text-left transition-colors duration-200"
+                >
+                  View Profile
+                </button>
               </div>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-800/60 text-[11px] text-slate-500 flex justify-between items-center">
@@ -439,7 +518,7 @@ function ChwDashboard({ user, onLogout, actionLoading }) {
         <div className="absolute top-[-15%] right-[-15%] w-[600px] h-[600px] bg-teal-950/10 rounded-full blur-[140px] pointer-events-none" />
         
         {/* Top Header Bar */}
-        <header className="h-20 border-b border-slate-800/80 px-8 flex items-center justify-between shrink-0 bg-slate-900/40 backdrop-blur-md relative z-10">
+        <header className="h-20 border-b border-slate-800/80 px-8 flex items-center justify-between shrink-0 bg-slate-900/40 backdrop-blur-md relative z-20">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold text-white tracking-wide capitalize">
               {activeTab === 'patients' ? 'Assigned Facility Patients' : activeTab === 'visits' ? 'Daily Care Visits' : activeTab}
@@ -516,200 +595,10 @@ function ChwDashboard({ user, onLogout, actionLoading }) {
         {/* Dynamic Inner CHW Pages */}
         <section className="flex-grow p-8 overflow-y-auto relative z-10 max-w-5xl w-full mx-auto">
           
-          {/* ================= PAGE: OVERVIEW ================= */}
-          {activeTab === 'overview' && (
-            <div className="space-y-6">
-              
-              {/* CHW Welcome Banner */}
-              <div className="bg-gradient-to-r from-teal-950/30 to-slate-900/30 border border-teal-500/20 rounded-3xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div className="space-y-1">
-                  <h2 className="text-xl font-bold text-slate-100">Hello, {user.name.split(' ')[0]}</h2>
-                  <p className="text-slate-400 text-xs">Track clinical routines and complete community visits for patients.</p>
-                </div>
-                <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 px-3 py-1.5 rounded-full text-xs font-semibold">
-                  <CheckCircle className="h-4 w-4" /> Shift Active
-                </div>
-              </div>
-
-              {/* Health stats block */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {[
-                  { title: 'Total Patients', value: patients.length.toString(), desc: 'Under your facility care', icon: Users, color: 'text-rose-400 bg-rose-500/10 border-rose-500/25' },
-                  { title: 'Visits Completed', value: `${visits.filter(v => v.status === 'Completed').length} / ${visits.length}`, desc: 'Shift progress', icon: Clock, color: 'text-teal-400 bg-teal-500/10 border-teal-500/25' },
-                  { title: 'Active Facility Code', value: 'REG-ZA', desc: 'Secure identifier', icon: Calendar, color: 'text-sky-400 bg-sky-500/10 border-sky-500/25' }
-                ].map((stat, i) => {
-                  const Icon = stat.icon;
-                  return (
-                    <div key={i} className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
-                      <div className="space-y-1.5">
-                        <span className="text-slate-500 text-xs font-semibold tracking-wide uppercase">{stat.title}</span>
-                        <h3 className="text-lg font-bold text-white">{stat.value}</h3>
-                        <p className="text-[11px] text-slate-400">{stat.desc}</p>
-                      </div>
-                      <div className={`h-11 w-11 rounded-xl border flex items-center justify-center ${stat.color}`}>
-                        <Icon className="h-5 w-5" />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Grid: Overview summaries */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-                
-                {/* Left: Visits check list */}
-                <div className="md:col-span-12 bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-                    <h3 className="font-bold text-slate-200">Today’s Patient Visits</h3>
-                    <button 
-                      onClick={() => setActiveTab('visits')}
-                      className="text-xs text-teal-400 hover:text-teal-300 font-semibold"
-                    >
-                      View Checklist
-                    </button>
-                  </div>
-
-                  <div className="divide-y divide-slate-800/80">
-                    {visits.slice(0, 3).map((v) => (
-                      <div key={v.id} className="py-4 flex items-center justify-between first:pt-0 last:pb-0">
-                        <div className="flex items-start gap-3">
-                          <button
-                            onClick={() => toggleVisitStatus(v.id)}
-                            className={`mt-0.5 h-5 w-5 rounded-md border flex items-center justify-center transition-all ${
-                              v.status === 'Completed'
-                                ? 'bg-teal-500 border-teal-500 text-slate-950 font-bold'
-                                : 'border-slate-700 hover:border-teal-500/50 bg-slate-950'
-                            }`}
-                          >
-                            {v.status === 'Completed' && <CheckCircle className="h-3.5 w-3.5" />}
-                          </button>
-                          <div>
-                            <p className={`font-semibold text-sm ${v.status === 'Completed' ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
-                              {v.patient}
-                            </p>
-                            <p className="text-xs text-slate-400 mt-0.5">{v.task}</p>
-                          </div>
-                        </div>
-                        <span className="text-xs text-slate-500 font-mono">{v.time}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-              </div>
-
-            </div>
-          )}
-
-          {/* ================= PAGE: ASSIGNED PATIENTS ================= */}
-          {activeTab === 'patients' && (
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
-              <div className="pb-4 border-b border-slate-800">
-                <h3 className="font-bold text-slate-200">Facility Patient Index</h3>
-                <p className="text-slate-500 text-xs">Patients associated with your organization registrar</p>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-800 text-slate-400 text-xs">
-                      <th className="py-3 px-4">Patient Name</th>
-                      <th className="py-3 px-4">Gender & Age</th>
-                      <th className="py-3 px-4">Contact Info</th>
-                      <th className="py-3 px-4">Address Details</th>
-                      <th className="py-3 px-4">National ID</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/80">
-                    {loadingPatients ? (
-                      <tr>
-                        <td colSpan="5" className="py-8 text-center text-slate-550">
-                          <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-teal-400" />
-                          Loading patients index...
-                        </td>
-                      </tr>
-                    ) : patients.length === 0 ? (
-                      <tr>
-                        <td colSpan="5" className="py-8 text-center text-slate-550">
-                          No patients currently registered in your facility's jurisdiction.
-                        </td>
-                      </tr>
-                    ) : (
-                      patients.map((pt) => (
-                        <tr key={pt.id} className="hover:bg-slate-800/20 transition-colors">
-                          <td className="py-3.5 px-4 font-bold text-slate-200">
-                            {pt.fullname}
-                            <span className="block text-[10px] text-slate-500 font-mono mt-0.5">PT-{pt.id}</span>
-                          </td>
-                          <td className="py-3.5 px-4 text-slate-400">
-                            {pt.gender}, {calculateAgeFromId(pt.id_number)}
-                          </td>
-                          <td className="py-3.5 px-4 text-slate-350">
-                            <span className="block text-slate-200">{pt.phone_number}</span>
-                            <span className="block text-xs text-slate-500">{pt.email || 'No email provided'}</span>
-                          </td>
-                          <td className="py-3.5 px-4 text-slate-400 text-xs">
-                            <span className="block font-semibold text-slate-300">{pt.house_number} {pt.surbub}</span>
-                            <span className="block text-slate-500">{pt.municipality}, {pt.city}</span>
-                          </td>
-                          <td className="py-3.5 px-4 font-mono text-xs text-slate-500">{pt.id_number}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
           {/* ================= PAGE: DAILY VISITS ================= */}
           {activeTab === 'visits' && (
             <div className="space-y-6">
               
-              {/* Daily Care Visits */}
-              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
-                <div className="pb-4 border-b border-slate-800">
-                  <h3 className="font-bold text-slate-200">Visits Checklist</h3>
-                  <p className="text-slate-500 text-xs">Monitor medication and routine checks for assigned patient visits</p>
-                </div>
-
-                <div className="divide-y divide-slate-800/80">
-                  {visits.map((v) => (
-                    <div key={v.id} className="py-4.5 flex items-center justify-between">
-                      <div className="flex items-start gap-4">
-                        <button
-                          onClick={() => toggleVisitStatus(v.id)}
-                          className={`mt-0.5 h-6.5 w-6.5 rounded-lg border flex items-center justify-center transition-all ${
-                            v.status === 'Completed'
-                              ? 'bg-teal-500 border-teal-500 text-slate-950 font-extrabold'
-                              : 'border-slate-700 hover:border-teal-500/50 bg-slate-950'
-                          }`}
-                        >
-                          {v.status === 'Completed' && <CheckCircle className="h-4.5 w-4.5" />}
-                        </button>
-                        <div>
-                          <p className={`font-bold text-sm ${v.status === 'Completed' ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
-                            {v.patient}
-                          </p>
-                          <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
-                            <MapPin className="h-3 w-3 text-slate-500" />
-                            {v.task}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs font-semibold text-slate-500 font-mono block">{v.time}</span>
-                        <span className={`inline-block text-[9px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full mt-1.5 ${
-                          v.status === 'Completed' ? 'bg-teal-500/10 text-teal-400' : 'bg-amber-500/10 text-amber-400'
-                        }`}>
-                          {v.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
               {/* Scheduled Home Visits (assigned by Admin) */}
               <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
                 <div className="pb-4 border-b border-slate-800">
@@ -1038,6 +927,220 @@ function ChwDashboard({ user, onLogout, actionLoading }) {
 
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* ================= PROFILE MODAL ================= */}
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => setIsProfileModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <h2 className="text-xl font-bold text-white">Profile Details</h2>
+              <p className="text-slate-400 text-xs mt-1">Manage and view your user profile details.</p>
+            </div>
+
+            {profileLoading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 text-teal-500 animate-spin mb-2" />
+                <p className="text-xs text-slate-400">Loading profile details...</p>
+              </div>
+            ) : profileError ? (
+              <div className="p-4 bg-red-950/30 border border-red-500/20 rounded-2xl flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-sm font-bold text-red-200">Error</h4>
+                  <p className="text-xs text-red-400 mt-1">{profileError}</p>
+                  <button 
+                    type="button"
+                    onClick={fetchProfile}
+                    className="mt-2 text-xs font-semibold text-teal-400 hover:underline"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveProfile} className="space-y-6">
+                {profileSuccess && (
+                  <div className="p-4 bg-teal-950/30 border border-teal-500/20 rounded-2xl flex items-center gap-3">
+                    <CheckCircle className="h-5 w-5 text-teal-400 shrink-0" />
+                    <p className="text-xs text-teal-300 font-semibold">{profileSuccess}</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Full Name</label>
+                    <input
+                      type="text"
+                      required
+                      disabled={!isEditingProfile}
+                      value={profileForm.fullname}
+                      onChange={(e) => setProfileForm({ ...profileForm, fullname: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-medium transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Gender</label>
+                    <select
+                      required
+                      disabled={!isEditingProfile}
+                      value={profileForm.gender}
+                      onChange={(e) => setProfileForm({ ...profileForm, gender: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-medium transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                    >
+                      <option value="">Select Gender</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      disabled={!isEditingProfile}
+                      value={profileForm.email}
+                      onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Phone Number</label>
+                    <input
+                      type="text"
+                      required
+                      disabled={!isEditingProfile}
+                      value={profileForm.phone_number}
+                      onChange={(e) => setProfileForm({ ...profileForm, phone_number: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-mono transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">House Number</label>
+                    <input
+                      type="text"
+                      disabled={!isEditingProfile}
+                      value={profileForm.house_number}
+                      onChange={(e) => setProfileForm({ ...profileForm, house_number: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Suburb</label>
+                    <input
+                      type="text"
+                      disabled={!isEditingProfile}
+                      value={profileForm.surbub}
+                      onChange={(e) => setProfileForm({ ...profileForm, surbub: e.target.value })}
+                      className="w-full bg-slate-950 border border-teal-500 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Municipality</label>
+                    <input
+                      type="text"
+                      disabled={!isEditingProfile}
+                      value={profileForm.municipality}
+                      onChange={(e) => setProfileForm({ ...profileForm, municipality: e.target.value })}
+                      className="w-full bg-slate-950 border border-teal-500 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">City</label>
+                    <input
+                      type="text"
+                      disabled={!isEditingProfile}
+                      value={profileForm.city}
+                      onChange={(e) => setProfileForm({ ...profileForm, city: e.target.value })}
+                      className="w-full bg-slate-950 border border-teal-500 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-800/80">
+                  <div>
+                    <span className="text-[10px] text-slate-550 block font-semibold uppercase mb-1">Employee ID (Uneditable)</span>
+                    <div className="bg-slate-950/60 border border-slate-800/50 rounded-xl px-4 py-2.5 text-sm text-slate-400 font-mono select-none">
+                      {profileData?.employee_id || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-550 block font-semibold uppercase mb-1">Identity Number (Uneditable)</span>
+                    <div className="bg-slate-950/60 border border-slate-800/50 rounded-xl px-4 py-2.5 text-sm text-slate-400 font-mono select-none">
+                      {profileData?.id_number || '—'}
+                    </div>
+                  </div>
+                  <div className="md:col-span-2">
+                    <span className="text-[10px] text-slate-550 block font-semibold uppercase mb-1">Organization (Uneditable)</span>
+                    <div className="bg-slate-950/60 border border-slate-800/50 rounded-xl px-4 py-2.5 text-sm text-slate-400 font-medium select-none">
+                      {profileData?.organization || '—'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+                  {isEditingProfile ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditingProfile(false);
+                          setProfileForm({
+                            fullname: profileData?.fullname || '',
+                            gender: profileData?.gender || '',
+                            email: profileData?.email || '',
+                            phone_number: profileData?.phone_number || '',
+                            house_number: profileData?.house_number || '',
+                            surbub: profileData?.surbub || '',
+                            municipality: profileData?.municipality || '',
+                            city: profileData?.city || ''
+                          });
+                          setProfileError('');
+                          setProfileSuccess('');
+                        }}
+                        className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition-all duration-300"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={profileSaving}
+                        className="px-5 py-2.5 bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-sm transition-all duration-300 flex items-center justify-center gap-1.5 shadow-lg shadow-teal-500/20"
+                      >
+                        {profileSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Save Changes
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingProfile(true)}
+                      className="px-6 py-2.5 bg-slate-850 border border-slate-700/60 hover:bg-slate-800 text-teal-400 font-bold rounded-xl text-sm transition-all duration-300"
+                    >
+                      Edit Profile
+                    </button>
+                  )}
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

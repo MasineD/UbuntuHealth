@@ -182,6 +182,219 @@ router.get('/my-organization', protect, async (req, res) => {
     }
 });
 
+// Get current user's profile details
+router.get('/profile', protect, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const role = req.user.role;
+
+        if (role === 'admin') {
+            const result = await pool.query(
+                'SELECT id, fullname, identity, phone_number, email, organization, facility_code FROM users.admins WHERE id = $1',
+                [userId]
+            );
+            if (result.rows.length === 0) {
+                return res.status(404).json({ message: 'Admin profile not found' });
+            }
+            return res.json({ profile: result.rows[0], role });
+        } else if (role === 'staff') {
+            const result = await pool.query(
+                `SELECT s.id, s.employee_id, s.fullname, s.id_number, s.gender, s.role as staff_role, s.email, s.phone_number, s.house_number, s.surbub, s.municipality, s.city, a.organization 
+                 FROM users.clinical_staff s
+                 LEFT JOIN users.admins a ON s.registra_id = a.id
+                 WHERE s.id = $1`,
+                [userId]
+            );
+            if (result.rows.length === 0) {
+                return res.status(404).json({ message: 'Staff profile not found' });
+            }
+            return res.json({ profile: result.rows[0], role });
+        } else if (role === 'chw') {
+            const result = await pool.query(
+                `SELECT c.id, c.employee_id, c.fullname, c.id_number, c.gender, c.email, c.phone_number, c.house_number, c.surbub, c.municipality, c.city, a.organization 
+                 FROM users.comm_health_workers c
+                 LEFT JOIN users.admins a ON c.registra_id = a.id
+                 WHERE c.id = $1`,
+                [userId]
+            );
+            if (result.rows.length === 0) {
+                return res.status(404).json({ message: 'CHW profile not found' });
+            }
+            return res.json({ profile: result.rows[0], role });
+        } else if (role === 'patient') {
+            const result = await pool.query(
+                `SELECT p.id, p.fullname, p.id_number, p.gender, p.email, p.phone_number, p.house_number, p.surbub, p.municipality, p.city, p.next_of_kin_fullname, p.next_of_kin_email, p.next_of_kin_phone, a.organization 
+                 FROM users.patients p
+                 LEFT JOIN users.admins a ON p.registra_id = a.id
+                 WHERE p.id = $1`,
+                [userId]
+            );
+            if (result.rows.length === 0) {
+                return res.status(404).json({ message: 'Patient profile not found' });
+            }
+            return res.json({ profile: result.rows[0], role });
+        } else {
+            return res.status(400).json({ message: 'Invalid user role' });
+        }
+    } catch (error) {
+        console.error('Error fetching user profile:', error.message);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Update current user's profile details
+router.put('/profile', protect, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const role = req.user.role;
+        const updates = req.body;
+
+        if (role === 'admin') {
+            const { fullname, phone_number, email } = updates;
+            if (!fullname || !phone_number || !email) {
+                return res.status(400).json({ message: 'Full name, phone number, and email are required' });
+            }
+
+            await pool.query(
+                'UPDATE users.admins SET fullname = $1, phone_number = $2, email = $3 WHERE id = $4',
+                [fullname, phone_number, email, userId]
+            );
+
+            const updated = await pool.query(
+                'SELECT id, fullname, identity, phone_number, email, organization, facility_code FROM users.admins WHERE id = $1',
+                [userId]
+            );
+            const profileData = updated.rows[0];
+            return res.json({ 
+                message: 'Profile updated successfully', 
+                profile: profileData, 
+                role,
+                user: { 
+                    id: userId, 
+                    name: profileData.fullname, 
+                    email: profileData.email, 
+                    organization: profileData.organization, 
+                    facility_code: profileData.facility_code, 
+                    role: 'admin' 
+                }
+            });
+        } else if (role === 'staff') {
+            const { fullname, gender, email, phone_number, house_number, surbub, municipality, city } = updates;
+            if (!fullname || !gender || !phone_number) {
+                return res.status(400).json({ message: 'Full name, gender, and phone number are required' });
+            }
+
+            await pool.query(
+                `UPDATE users.clinical_staff 
+                 SET fullname = $1, gender = $2, email = $3, phone_number = $4, house_number = $5, surbub = $6, municipality = $7, city = $8 
+                 WHERE id = $9`,
+                [fullname, gender, email || null, phone_number, house_number || null, surbub || null, municipality || null, city || null, userId]
+            );
+
+            const updated = await pool.query(
+                `SELECT s.id, s.employee_id, s.fullname, s.id_number, s.gender, s.role as staff_role, s.email, s.phone_number, s.house_number, s.surbub, s.municipality, s.city, a.organization 
+                 FROM users.clinical_staff s
+                 LEFT JOIN users.admins a ON s.registra_id = a.id
+                 WHERE s.id = $1`,
+                [userId]
+            );
+            const profileData = updated.rows[0];
+            return res.json({ 
+                message: 'Profile updated successfully', 
+                profile: profileData, 
+                role,
+                user: { 
+                    id: userId, 
+                    name: profileData.fullname, 
+                    email: profileData.email, 
+                    id_number: profileData.id_number, 
+                    employee_id: profileData.employee_id, 
+                    gender: profileData.gender, 
+                    phone_number: profileData.phone_number, 
+                    staff_role: profileData.staff_role, 
+                    role: 'staff' 
+                }
+            });
+        } else if (role === 'chw') {
+            const { fullname, gender, email, phone_number, house_number, surbub, municipality, city } = updates;
+            if (!fullname || !gender || !phone_number) {
+                return res.status(400).json({ message: 'Full name, gender, and phone number are required' });
+            }
+
+            await pool.query(
+                `UPDATE users.comm_health_workers 
+                 SET fullname = $1, gender = $2, email = $3, phone_number = $4, house_number = $5, surbub = $6, municipality = $7, city = $8 
+                 WHERE id = $9`,
+                [fullname, gender, email || null, phone_number, house_number || null, surbub || null, municipality || null, city || null, userId]
+            );
+
+            const updated = await pool.query(
+                `SELECT c.id, c.employee_id, c.fullname, c.id_number, c.gender, c.email, c.phone_number, c.house_number, c.surbub, c.municipality, c.city, a.organization 
+                 FROM users.comm_health_workers c
+                 LEFT JOIN users.admins a ON c.registra_id = a.id
+                 WHERE c.id = $1`,
+                [userId]
+            );
+            const profileData = updated.rows[0];
+            return res.json({ 
+                message: 'Profile updated successfully', 
+                profile: profileData, 
+                role,
+                user: { 
+                    id: userId, 
+                    name: profileData.fullname, 
+                    email: profileData.email, 
+                    id_number: profileData.id_number, 
+                    employee_id: profileData.employee_id, 
+                    gender: profileData.gender, 
+                    phone_number: profileData.phone_number, 
+                    role: 'chw' 
+                }
+            });
+        } else if (role === 'patient') {
+            const { fullname, gender, email, phone_number, house_number, surbub, municipality, city, next_of_kin_fullname, next_of_kin_email, next_of_kin_phone } = updates;
+            if (!fullname || !gender || !phone_number || !next_of_kin_fullname || !next_of_kin_phone) {
+                return res.status(400).json({ message: 'Full name, gender, phone number, next of kin name, and next of kin phone are required' });
+            }
+
+            await pool.query(
+                `UPDATE users.patients 
+                 SET fullname = $1, gender = $2, email = $3, phone_number = $4, house_number = $5, surbub = $6, municipality = $7, city = $8, next_of_kin_fullname = $9, next_of_kin_email = $10, next_of_kin_phone = $11 
+                 WHERE id = $12`,
+                [fullname, gender, email || null, phone_number, house_number || null, surbub || null, municipality || null, city || null, next_of_kin_fullname, next_of_kin_email || null, next_of_kin_phone, userId]
+            );
+
+            const updated = await pool.query(
+                `SELECT p.id, p.fullname, p.id_number, p.gender, p.email, p.phone_number, p.house_number, p.surbub, p.municipality, p.city, p.next_of_kin_fullname, p.next_of_kin_email, p.next_of_kin_phone, a.organization 
+                 FROM users.patients p
+                 LEFT JOIN users.admins a ON p.registra_id = a.id
+                 WHERE p.id = $1`,
+                [userId]
+            );
+            const profileData = updated.rows[0];
+            return res.json({ 
+                message: 'Profile updated successfully', 
+                profile: profileData, 
+                role,
+                user: { 
+                    id: userId, 
+                    name: profileData.fullname, 
+                    email: profileData.email, 
+                    id_number: profileData.id_number, 
+                    gender: profileData.gender, 
+                    phone_number: profileData.phone_number, 
+                    role: 'patient' 
+                }
+            });
+        } else {
+            return res.status(400).json({ message: 'Invalid user role' });
+        }
+    } catch (error) {
+        console.error('Error updating user profile:', error.message);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
 // Logout route
 router.post('/logout', (req, res) => {
     res.clearCookie('token', {

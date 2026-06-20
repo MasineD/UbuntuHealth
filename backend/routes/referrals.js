@@ -1,6 +1,7 @@
 import express from 'express';
 import pool from '../config/database.js';
 import protect from '../middleware/auth.js';
+import crypto from 'crypto';
 
 const router = express.Router();
 
@@ -80,10 +81,12 @@ router.post('/referrals', protect, async (req, res) => {
         }
 
         // Creating a new referral
+        const referralKey = crypto.randomBytes(4).toString('hex').toUpperCase();
+
         const newReferral = await pool.query(
             `INSERT INTO tasks.referrals (
-                referrer_id, referrer_role, personel, organization_to, department_to, staff_to, reason, arrival_date, arrival_time, status
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
+                referrer_id, referrer_role, personel, organization_to, department_to, staff_to, reason, arrival_date, arrival_time, status, referral_key
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
             RETURNING *`,
             [
                 req.user.id,
@@ -95,7 +98,8 @@ router.post('/referrals', protect, async (req, res) => {
                 reason,
                 arrival_date,
                 arrival_time || null,
-                false
+                false,
+                referralKey
             ]
         );
 
@@ -233,13 +237,24 @@ router.put('/referrals/:id/status', protect, async (req, res) => {
 
         const referral = refRes.rows[0];
 
+        // If referral has a referral_key generated, verify it
+        if (referral.referral_key) {
+            const clientKey = req.body.key || req.body.referral_key;
+            if (!clientKey) {
+                return res.status(400).json({ message: 'Referral key is required to mark it as attended' });
+            }
+            if (clientKey.toString().toUpperCase() !== referral.referral_key.toString().toUpperCase()) {
+                return res.status(400).json({ message: 'Invalid referral key' });
+            }
+        }
+
         // Enforce authorization:
         // Only the person who the referral is made to can change status.
         let isAuthorized = false;
 
         if (referral.staff_to) {
             // Made to a specific staff member
-            if (req.user.role === 'social worker' || req.user.role === 'doctor/nurse' || req.user.role === 'therapist') {
+            if (req.user.staff_role === 'social worker' || req.user.staff_role === 'doctor/nurse' || req.user.staff_role === 'therapist') {
                 const currentUserIdStr = req.user.id.toString();
                 if (
                     referral.staff_to === currentUserIdStr || 
