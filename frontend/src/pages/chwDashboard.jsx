@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { LayoutDashboard, Users, Clock, LogOut, Loader2, ShieldCheck, Bell, CheckCircle, User as UserIcon, Heart, Calendar, Activity, ClipboardList, MapPin, MessageSquare, Send } from 'lucide-react';
+import { LayoutDashboard, Users, Clock, LogOut, Loader2, ShieldCheck, Bell, CheckCircle, User as UserIcon, Heart, Calendar, Activity, ClipboardList, MapPin, MessageSquare, Send, Plus } from 'lucide-react';
 import { io } from 'socket.io-client';
 import ChatRoom from '../components/ChatRoom';
 
@@ -16,6 +16,33 @@ function ChwDashboard({ user, onLogout, actionLoading }) {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'patients' | 'visits' | 'referrals'
   const [patients, setPatients] = useState([]);
   const [loadingPatients, setLoadingPatients] = useState(false);
+
+  const [homeVisits, setHomeVisits] = useState([]);
+
+  const fetchHomeVisits = async () => {
+    try {
+      const response = await api.get('/auth/chw/home-visits');
+      if (response.data && response.data.homeVisits) {
+        setHomeVisits(response.data.homeVisits);
+      }
+    } catch (err) {
+      console.error('Error fetching home visits:', err);
+    }
+  };
+
+  const handleFulfillHomeVisit = async (visitId) => {
+    try {
+      await api.post(`/auth/chw/home-visits/${visitId}/fulfill`);
+      fetchHomeVisits();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to fulfill home visit');
+    }
+  };
+
+  const fetchHomeVisitsRef = useRef(fetchHomeVisits);
+  useEffect(() => {
+    fetchHomeVisitsRef.current = fetchHomeVisits;
+  });
 
   // Socket & Notifications state
   const [socket, setSocket] = useState(null);
@@ -54,11 +81,15 @@ function ChwDashboard({ user, onLogout, actionLoading }) {
 
           const newToast = {
             id: Date.now() + Math.random(),
-            type: data.type === 'referral_created' ? 'referral' : 'appointment',
+            type: data.type === 'home_visit' ? 'referral' : (data.type === 'referral_created' ? 'referral' : 'appointment'),
             title: data.title,
             message: data.message
           };
           setToasts(prev => [...prev, newToast]);
+
+          if (data.type === 'home_visit' && fetchHomeVisitsRef.current) {
+            fetchHomeVisitsRef.current();
+          }
 
           setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== newToast.id));
@@ -287,6 +318,7 @@ function ChwDashboard({ user, onLogout, actionLoading }) {
     fetchReferrals();
     fetchChwOrganization();
     fetchOrganizationPatients();
+    fetchHomeVisits();
   }, []);
 
   const sidebarItems = [
@@ -622,47 +654,110 @@ function ChwDashboard({ user, onLogout, actionLoading }) {
 
           {/* ================= PAGE: DAILY VISITS ================= */}
           {activeTab === 'visits' && (
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
-              <div className="pb-4 border-b border-slate-800">
-                <h3 className="font-bold text-slate-200">Visits Checklist</h3>
-                <p className="text-slate-500 text-xs">Monitor medication and routine checks for assigned patient visits</p>
-              </div>
+            <div className="space-y-6">
+              
+              {/* Daily Care Visits */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div className="pb-4 border-b border-slate-800">
+                  <h3 className="font-bold text-slate-200">Visits Checklist</h3>
+                  <p className="text-slate-500 text-xs">Monitor medication and routine checks for assigned patient visits</p>
+                </div>
 
-              <div className="divide-y divide-slate-800/80">
-                {visits.map((v) => (
-                  <div key={v.id} className="py-4.5 flex items-center justify-between">
-                    <div className="flex items-start gap-4">
-                      <button
-                        onClick={() => toggleVisitStatus(v.id)}
-                        className={`mt-0.5 h-6.5 w-6.5 rounded-lg border flex items-center justify-center transition-all ${
-                          v.status === 'Completed'
-                            ? 'bg-teal-500 border-teal-500 text-slate-950 font-extrabold'
-                            : 'border-slate-700 hover:border-teal-500/50 bg-slate-950'
-                        }`}
-                      >
-                        {v.status === 'Completed' && <CheckCircle className="h-4.5 w-4.5" />}
-                      </button>
-                      <div>
-                        <p className={`font-bold text-sm ${v.status === 'Completed' ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
-                          {v.patient}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
-                          <MapPin className="h-3 w-3 text-slate-500" />
-                          {v.task}
-                        </p>
+                <div className="divide-y divide-slate-800/80">
+                  {visits.map((v) => (
+                    <div key={v.id} className="py-4.5 flex items-center justify-between">
+                      <div className="flex items-start gap-4">
+                        <button
+                          onClick={() => toggleVisitStatus(v.id)}
+                          className={`mt-0.5 h-6.5 w-6.5 rounded-lg border flex items-center justify-center transition-all ${
+                            v.status === 'Completed'
+                              ? 'bg-teal-500 border-teal-500 text-slate-950 font-extrabold'
+                              : 'border-slate-700 hover:border-teal-500/50 bg-slate-950'
+                          }`}
+                        >
+                          {v.status === 'Completed' && <CheckCircle className="h-4.5 w-4.5" />}
+                        </button>
+                        <div>
+                          <p className={`font-bold text-sm ${v.status === 'Completed' ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
+                            {v.patient}
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
+                            <MapPin className="h-3 w-3 text-slate-500" />
+                            {v.task}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-semibold text-slate-500 font-mono block">{v.time}</span>
+                        <span className={`inline-block text-[9px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full mt-1.5 ${
+                          v.status === 'Completed' ? 'bg-teal-500/10 text-teal-400' : 'bg-amber-500/10 text-amber-400'
+                        }`}>
+                          {v.status}
+                        </span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-xs font-semibold text-slate-500 font-mono block">{v.time}</span>
-                      <span className={`inline-block text-[9px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full mt-1.5 ${
-                        v.status === 'Completed' ? 'bg-teal-500/10 text-teal-400' : 'bg-amber-500/10 text-amber-400'
-                      }`}>
-                        {v.status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
+
+              {/* Scheduled Home Visits (assigned by Admin) */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div className="pb-4 border-b border-slate-800">
+                  <h3 className="font-bold text-slate-200">Scheduled Home Visits</h3>
+                  <p className="text-slate-500 text-xs">Patient home follow-ups assigned due to medication non-compliance</p>
+                </div>
+
+                {homeVisits.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic py-2">No scheduled home visits assigned to you.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {homeVisits.map((visit) => (
+                      <div key={visit.id} className="bg-slate-950/40 border border-slate-800 p-4 rounded-xl flex flex-col justify-between gap-4">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="font-bold text-slate-200 text-sm">{visit.patient_name}</h4>
+                              <p className="text-xs text-slate-500">ID: {visit.patient_id_number || 'N/A'}</p>
+                            </div>
+                            <span className={`font-mono text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                              visit.status === 'fulfilled'
+                                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                                : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                            }`}>
+                              {visit.status === 'fulfilled' ? 'fulfilled' : 'Pending Visit'}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-slate-400 border-t border-slate-800/40 pt-2.5">
+                            <div><strong>Phone:</strong> {visit.patient_phone || 'N/A'}</div>
+                            <div><strong>Gender:</strong> {visit.patient_gender || 'N/A'}</div>
+                            <div><strong>Address:</strong> {visit.patient_address || 'N/A'}</div>
+                            <div><strong>Visit Date:</strong> {visit.visit_date || 'N/A'}</div>
+                            <div className="col-span-2"><strong>Next of Kin:</strong> {visit.patient_next_of_kin || 'N/A'} ({visit.patient_next_of_kin_phone || 'N/A'})</div>
+                            <div className="col-span-2"><strong>Reason:</strong> {visit.reason || 'N/A'}</div>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end pt-2 border-t border-slate-800/40">
+                          {visit.status === 'fulfilled' ? (
+                            <span className="text-xs text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
+                              Fulfilled
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleFulfillHomeVisit(visit.id)}
+                              className="py-1.5 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                            >
+                              Mark Fulfilled
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
             </div>
           )}
 

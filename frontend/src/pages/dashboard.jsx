@@ -143,6 +143,11 @@ function Dashboard({ user, onLogout, actionLoading }) {
   // State to hold retrieved patients
   const [patients, setPatients] = useState([]);
   const [complianceAlerts, setComplianceAlerts] = useState([]);
+  const [isScheduleVisitModalOpen, setIsScheduleVisitModalOpen] = useState(false);
+  const [selectedAlertForVisit, setSelectedAlertForVisit] = useState(null);
+  const [selectedChwId, setSelectedChwId] = useState('');
+  const [visitReason, setVisitReason] = useState('Medication Non-Compliance Follow-up');
+  const [visitDate, setVisitDate] = useState('');
   const [loadingPatients, setLoadingPatients] = useState(false);
 
   // Appointments administrative state
@@ -209,13 +214,28 @@ function Dashboard({ user, onLogout, actionLoading }) {
     }
   };
 
-  const handleScheduleHomeVisit = async (alertId) => {
+  const handleScheduleHomeVisit = (alert) => {
+    setSelectedAlertForVisit(alert);
+    setSelectedChwId('');
+    setVisitReason('Medication Non-Compliance Follow-up');
+    setVisitDate(new Date().toISOString().split('T')[0]);
+    setIsScheduleVisitModalOpen(true);
+  };
+
+  const submitScheduleHomeVisit = async () => {
+    if (!selectedAlertForVisit || !selectedChwId || !visitDate) return;
     try {
-      const response = await api.post(`/auth/admin/compliance-alerts/${alertId}/schedule-visit`);
+      const response = await api.post(`/auth/admin/compliance-alerts/${selectedAlertForVisit.id}/schedule-visit`, {
+        chwId: selectedChwId,
+        reason: visitReason,
+        date: visitDate
+      });
       if (response.data) {
         setComplianceAlerts(prev => prev.map(a => 
-          a.id === alertId ? { ...a, visit_scheduled: true } : a
+          a.id === selectedAlertForVisit.id ? { ...a, visit_scheduled: true, visit_date: visitDate, visit_reason: visitReason } : a
         ));
+        setIsScheduleVisitModalOpen(false);
+        setSelectedAlertForVisit(null);
       }
     } catch (err) {
       console.error('Error scheduling home visit:', err);
@@ -1117,12 +1137,15 @@ function Dashboard({ user, onLogout, actionLoading }) {
                         </div>
                         <div className="flex justify-end pt-2 border-t border-slate-800/40">
                           {alert.visit_scheduled ? (
-                            <span className="text-xs text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
-                              Home Visit Scheduled
-                            </span>
+                            <button
+                              disabled
+                              className="py-1.5 px-3 bg-slate-800 text-slate-500 text-xs font-bold rounded-lg cursor-not-allowed"
+                            >
+                              Scheduled
+                            </button>
                           ) : (
                             <button
-                              onClick={() => handleScheduleHomeVisit(alert.id)}
+                              onClick={() => handleScheduleHomeVisit(alert)}
                               className="py-1.5 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg transition-colors cursor-pointer"
                             >
                               Schedule Home Visit
@@ -2911,6 +2934,92 @@ function Dashboard({ user, onLogout, actionLoading }) {
               </div>
 
             </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= SCHEDULE HOME VISIT MODAL ================= */}
+      {isScheduleVisitModalOpen && selectedAlertForVisit && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => { setIsScheduleVisitModalOpen(false); setSelectedAlertForVisit(null); }}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <h2 className="text-xl font-bold text-white">Schedule Home Visit</h2>
+              <p className="text-slate-400 text-xs mt-1">Assign a community health worker to visit {selectedAlertForVisit.patient_name}.</p>
+            </div>
+
+            <div className="space-y-4">
+              {/* CHW Selection */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold">Community Health Worker *</label>
+                <select
+                  value={selectedChwId}
+                  onChange={(e) => setSelectedChwId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                >
+                  <option value="">Select Community Health Worker</option>
+                  {chws.map((chw) => (
+                    <option key={chw.id} value={chw.id}>
+                      {chw.fullname} (ID: {chw.employee_id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Visit Date */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold">Visit Date *</label>
+                <input
+                  type="date"
+                  value={visitDate}
+                  onChange={(e) => setVisitDate(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                />
+              </div>
+
+              {/* Visit Reason */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold">Reason for Visit</label>
+                <textarea
+                  rows={3}
+                  value={visitReason}
+                  onChange={(e) => setVisitReason(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors resize-none"
+                  placeholder="Reason for visit..."
+                />
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-4 pt-4 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => { setIsScheduleVisitModalOpen(false); setSelectedAlertForVisit(null); }}
+                className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              {selectedChwId && (
+                <button
+                  type="button"
+                  onClick={submitScheduleHomeVisit}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all"
+                >
+                  Schedule
+                </button>
+              )}
+            </div>
 
           </div>
         </div>

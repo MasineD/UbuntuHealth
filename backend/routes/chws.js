@@ -119,4 +119,68 @@ router.get('/chw/patients', protect, async (req, res) => {
     }
 });
 
+// Get home visits assigned to the logged-in CHW
+router.get('/chw/home-visits', protect, async (req, res) => {
+    if (req.user.role !== 'chw') {
+        return res.status(403).json({ message: 'Only community health workers can view assigned visits' });
+    }
+    try {
+        const result = await pool.query(
+            `SELECT ca.id, ca.date::text, ca.visit_scheduled, ca.visit_status, ca.visit_reason, ca.visit_date::text, ca.patient_id,
+                    p.fullname AS patient_name, p.id_number AS patient_id_number,
+                    p.gender AS patient_gender, p.email AS patient_email,
+                    p.phone_number AS patient_phone, p.house_number, p.surbub, p.city,
+                    p.next_of_kin_fullname, p.next_of_kin_phone
+             FROM patients.compliance_alerts ca
+             JOIN users.patients p ON ca.patient_id = p.id
+             WHERE ca.chw_id = $1 AND ca.visit_scheduled = true
+             ORDER BY ca.id DESC`,
+            [req.user.id]
+        );
+        
+        const visits = result.rows.map(row => ({
+            id: row.id,
+            patient_id: row.patient_id,
+            patient_name: row.patient_name,
+            patient_id_number: row.patient_id_number,
+            patient_gender: row.patient_gender,
+            patient_phone: row.patient_phone,
+            patient_email: row.patient_email,
+            patient_address: `${row.house_number || ''} ${row.surbub || ''}, ${row.city || ''}`.trim(),
+            patient_next_of_kin: row.next_of_kin_fullname,
+            patient_next_of_kin_phone: row.next_of_kin_phone,
+            reason: row.visit_reason,
+            visit_date: row.visit_date,
+            status: row.visit_status
+        }));
+        return res.json({ homeVisits: visits });
+    } catch (error) {
+        console.error('Error fetching CHW home visits:', error.message);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Fulfill a home visit
+router.post('/chw/home-visits/:id/fulfill', protect, async (req, res) => {
+    if (req.user.role !== 'chw') {
+        return res.status(403).json({ message: 'Only community health workers can fulfill visits' });
+    }
+    const visitId = req.params.id;
+    try {
+        const result = await pool.query(
+            `UPDATE patients.compliance_alerts 
+             SET visit_status = 'fulfilled' 
+             WHERE id = $1 AND chw_id = $2 RETURNING *`,
+            [visitId, req.user.id]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Assigned home visit not found' });
+        }
+        return res.json({ message: 'Home visit marked as fulfilled successfully', visit: result.rows[0] });
+    } catch (error) {
+        console.error('Error fulfilling home visit:', error.message);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
 export default router;

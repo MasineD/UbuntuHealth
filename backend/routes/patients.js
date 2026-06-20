@@ -370,7 +370,7 @@ router.get('/admin/compliance-alerts', protect, async (req, res) => {
     }
     try {
         const result = await pool.query(
-            `SELECT ca.id, ca.date::text, ca.visit_scheduled, ca.patient_id,
+            `SELECT ca.id, ca.date::text, ca.visit_scheduled, ca.visit_date::text, ca.visit_reason, ca.visit_status, ca.patient_id,
                     p.fullname AS patient_name, p.id_number AS patient_id_number,
                     p.gender AS patient_gender, p.email AS patient_email,
                     p.phone_number AS patient_phone, p.house_number, p.surbub, p.city,
@@ -394,7 +394,10 @@ router.get('/admin/compliance-alerts', protect, async (req, res) => {
             patient_address: `${row.house_number || ''} ${row.surbub || ''}, ${row.city || ''}`.trim(),
             patient_next_of_kin: row.next_of_kin_fullname,
             patient_next_of_kin_phone: row.next_of_kin_phone,
-            visit_scheduled: row.visit_scheduled
+            visit_scheduled: row.visit_scheduled,
+            visit_date: row.visit_date,
+            visit_reason: row.visit_reason,
+            visit_status: row.visit_status
         }));
         return res.json({ complianceAlerts: alerts });
     } catch (error) {
@@ -403,22 +406,73 @@ router.get('/admin/compliance-alerts', protect, async (req, res) => {
     }
 });
 
-// Toggle compliance alert visit_scheduled status
+// Toggle compliance alert visit_scheduled status and assign CHW
 router.post('/admin/compliance-alerts/:id/schedule-visit', protect, async (req, res) => {
     if (req.user.role !== 'admin') {
         return res.status(403).json({ message: 'Only admins can schedule home visits' });
     }
     const alertId = req.params.id;
+    const { chwId, reason, date } = req.body;
+    if (!chwId || !date) {
+        return res.status(400).json({ message: 'Community health worker and date are required' });
+    }
     try {
         const result = await pool.query(
-            `UPDATE patients.compliance_alerts SET visit_scheduled = true 
-             WHERE id = $1 RETURNING *`,
-            [alertId]
+            `UPDATE patients.compliance_alerts 
+             SET visit_scheduled = true, chw_id = $1, visit_reason = $2, visit_date = $3, visit_status = 'pending' 
+             WHERE id = $4 RETURNING *`,
+            [chwId, reason || 'Medication Non-Compliance Follow-up', date, alertId]
         );
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'Compliance alert not found' });
         }
-        return res.json({ message: 'Home visit scheduled successfully', alert: result.rows[0] });
+
+        const alert = result.rows[0];
+
+        // Query patient details to send in notifications
+        const patientRes = await pool.query(
+            `SELECT p.id, p.fullname, p.id_number, p.phone_number, p.gender, p.house_number, p.surbub, p.city 
+             FROM users.patients p WHERE p.id = $1`,
+            [alert.patient_id]
+        );
+        const patient = patientRes.rows[0] || {};
+        const org = req.user.organization;
+
+        const io = req.app.get('socketio');
+        if (io) {
+            // Notify CHW
+            const chwNotification = {
+                type: 'home_visit',
+                title: 'New Home Visit Assigned',
+                message: `You have been assigned a home visit for patient "${patient.fullname}" on ${date}. Reason: ${alert.visit_reason}`,
+                timestamp: new Date().toISOString(),
+                visit: {
+                    id: alert.id,
+                    reason: alert.visit_reason,
+                    visit_date: date,
+                    patient: {
+                        id: patient.id,
+                        fullname: patient.fullname,
+                        id_number: patient.id_number,
+                        phone_number: patient.phone_number,
+                        gender: patient.gender,
+                        address: `${patient.house_number || ''} ${patient.surbub || ''}, ${patient.city || ''}`.trim()
+                    }
+                }
+            };
+            io.to(`org_${org}_user_chw_${chwId}`).emit('new-notification', chwNotification);
+
+            // Notify Patient
+            const patientNotification = {
+                type: 'home_visit_scheduled',
+                title: 'Home Visit Scheduled',
+                message: `A home visit has been scheduled for you on ${date}. Reason: ${alert.visit_reason}`,
+                timestamp: new Date().toISOString()
+            };
+            io.to(`org_${org}_user_patient_${patient.id}`).emit('new-notification', patientNotification);
+        }
+
+        return res.json({ message: 'Home visit scheduled successfully', alert });
     } catch (error) {
         console.error('Error scheduling home visit:', error.message);
         return res.status(500).json({ message: 'Server error' });
