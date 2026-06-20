@@ -11,14 +11,21 @@ const protect = async (req, res, next) => {   //Defines an asynchronous middlewa
         const decoded = jwt.verify(token, process.env.JWT_SECRET);   //Verifies the JWT token using the secret key stored in environment variables.
         let user;
         if (decoded.role === 'patient') {
-            const result = await pool.query('SELECT id, fullname as name, email, \'patient\' as role FROM users.patients WHERE id = $1',
+            const result = await pool.query('SELECT id, fullname as name, fullname, email, \'patient\' as role FROM users.patients WHERE id = $1',
+                [decoded.id]);
+            if (result.rows.length === 0) {
+                return res.status(401).json({ message: 'Not authorized, user not found' });
+            }
+            user = result.rows[0];
+        } else if (decoded.role === 'chw') {
+            const result = await pool.query('SELECT id, employee_id, fullname as name, fullname, email, id_number, gender, phone_number, \'chw\' as role FROM users.comm_health_workers WHERE id = $1',
                 [decoded.id]);
             if (result.rows.length === 0) {
                 return res.status(401).json({ message: 'Not authorized, user not found' });
             }
             user = result.rows[0];
         } else {
-            const result = await pool.query('SELECT id, fullname, email, \'admin\' as role FROM users.admins WHERE id = $1',
+            const result = await pool.query('SELECT id, fullname as name, fullname, email, organization, facility_code, \'admin\' as role FROM users.admins WHERE id = $1',
                 [decoded.id]);
             if (result.rows.length === 0) {
                 return res.status(401).json({ message: 'Not authorized, user not found' });

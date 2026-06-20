@@ -94,8 +94,103 @@ function Dashboard({ user, onLogout, actionLoading }) {
     }
   };
 
+  // CHWs state
+  const [chws, setChws] = useState([]);
+  const [loadingChws, setLoadingChws] = useState(false);
+  const [isChwModalOpen, setIsChwModalOpen] = useState(false);
+  const [chwModalLoading, setChwModalLoading] = useState(false);
+  const [chwModalError, setChwModalError] = useState('');
+  const [chwModalSuccess, setChwModalSuccess] = useState('');
+
+  const [chwForm, setChwForm] = useState({
+    employee_id: '',
+    fullname: '',
+    id_number: '',
+    gender: 'Male',
+    password: '',
+    email: '',
+    phone_number: '',
+    house_number: '',
+    surbub: '',
+    municipality: '',
+    city: ''
+  });
+
+  const fetchChws = async () => {
+    setLoadingChws(true);
+    try {
+      const response = await api.get('/auth/chws');
+      if (response.data && response.data.chws) {
+        setChws(response.data.chws);
+      }
+    } catch (err) {
+      console.error('Error fetching CHWs:', err);
+    } finally {
+      setLoadingChws(false);
+    }
+  };
+
+  const handleRegisterChw = async (e) => {
+    e.preventDefault();
+    setChwModalError('');
+    setChwModalSuccess('');
+    
+    if (chwForm.id_number.length !== 13) {
+      setChwModalError('National ID must be exactly 13 digits');
+      return;
+    }
+    if (chwForm.phone_number.length !== 10) {
+      setChwModalError('Phone number must be exactly 10 digits');
+      return;
+    }
+
+    setChwModalLoading(true);
+    try {
+      const response = await api.post('/auth/register-chw', chwForm);
+      if (response.data && response.data.chw) {
+        setChwModalSuccess('Community health worker registered successfully!');
+        
+        // Add new CHW to state list
+        const newChw = response.data.chw;
+        setChws([
+          ...chws,
+          {
+            ...chwForm,
+            id: newChw.id
+          }
+        ]);
+
+        // Reset form
+        setChwForm({
+          employee_id: '',
+          fullname: '',
+          id_number: '',
+          gender: 'Male',
+          password: '',
+          email: '',
+          phone_number: '',
+          house_number: '',
+          surbub: '',
+          municipality: '',
+          city: ''
+        });
+
+        // Close modal after 1.5s
+        setTimeout(() => {
+          setIsChwModalOpen(false);
+          setChwModalSuccess('');
+        }, 1500);
+      }
+    } catch (err) {
+      setChwModalError(err.response?.data?.message || 'Failed to register CHW');
+    } finally {
+      setChwModalLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchPatients();
+    fetchChws();
   }, []);
 
   // Modal State
@@ -203,6 +298,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
   const sidebarItems = [
     { id: 'overview', name: 'Overview', icon: LayoutDashboard },
     { id: 'patients', name: 'Patients', icon: Users },
+    { id: 'chws', name: 'Comm. Health Workers', icon: UserIcon },
     { id: 'appointments', name: 'Appointments', icon: Calendar },
     { id: 'referrals', name: 'Referrals', icon: ArrowLeftRight },
     { id: 'chat', name: 'Chat Room', icon: MessageSquare }
@@ -349,7 +445,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
                   { title: 'Total Patients', value: patients.length.toString(), change: 'Registered by you', icon: Users, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
                   { title: 'Appointments Today', value: '8', change: 'Next at 10:30 AM', icon: Calendar, color: 'text-sky-400 bg-sky-500/10 border-sky-500/20' },
                   { title: 'Pending Referrals', value: '3', change: 'Requires Action', icon: ArrowLeftRight, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
-                  { title: 'Active Health Workers', value: '45', change: '8 online', icon: ShieldCheck, color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' }
+                  { title: 'Active Health Workers', value: chws.length.toString(), change: 'Registered in organization', icon: ShieldCheck, color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' }
                 ].map((stat, i) => {
                   const StatIcon = stat.icon;
                   return (
@@ -508,6 +604,74 @@ function Dashboard({ user, onLogout, actionLoading }) {
                               {pt.status}
                             </span>
                           </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ================= PAGE: COMMUNITY HEALTH WORKERS ================= */}
+          {activeTab === 'chws' && (
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                <div className="space-y-0.5">
+                  <h3 className="font-bold text-slate-200">Community Health Workers</h3>
+                  <p className="text-slate-500 text-xs">List of registered community health workers in your organization</p>
+                </div>
+                <button 
+                  onClick={() => setIsChwModalOpen(true)}
+                  className="py-2 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors"
+                >
+                  <Plus className="h-4 w-4" /> Add CHW
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-slate-400 text-xs">
+                      <th className="py-3 px-4">Name & Employee ID</th>
+                      <th className="py-3 px-4">Gender & Age</th>
+                      <th className="py-3 px-4">Contact Info</th>
+                      <th className="py-3 px-4">Location</th>
+                      <th className="py-3 px-4">National ID</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/80">
+                    {loadingChws ? (
+                      <tr>
+                        <td colSpan="5" className="py-8 text-center text-slate-550">
+                          <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-400" />
+                          Loading community health workers...
+                        </td>
+                      </tr>
+                    ) : chws.length === 0 ? (
+                      <tr>
+                        <td colSpan="5" className="py-8 text-center text-slate-550">
+                          No community health workers found. Click "Add CHW" to register one.
+                        </td>
+                      </tr>
+                    ) : (
+                      chws.map((chw) => (
+                        <tr key={chw.id} className="hover:bg-slate-800/20 transition-colors">
+                          <td className="py-3.5 px-4 font-bold text-slate-200">
+                            {chw.fullname}
+                            <span className="block text-[10px] text-slate-500 font-mono mt-0.5">Emp ID: {chw.employee_id}</span>
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-400">
+                            {chw.gender}, {calculateAgeFromId(chw.id_number)}
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-350">
+                            <span className="block text-slate-200">{chw.phone_number}</span>
+                            <span className="block text-xs text-slate-500">{chw.email || 'No email provided'}</span>
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-400">
+                            {chw.surbub}, {chw.city}
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-xs text-slate-500">{chw.id_number}</td>
                         </tr>
                       ))
                     )}
@@ -902,6 +1066,212 @@ function Dashboard({ user, onLogout, actionLoading }) {
                 >
                   {modalLoading && <Loader2 className="h-5 w-5 animate-spin" />}
                   {modalLoading ? 'Registering Patient...' : 'Register Patient'}
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= CHW REGISTRATION MODAL ================= */}
+      {isChwModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => { setIsChwModalOpen(false); setChwModalError(''); setChwModalSuccess(''); }}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <h2 className="text-xl font-bold text-white">Register New Community Health Worker</h2>
+              <p className="text-slate-400 text-xs mt-1">Provide all details to add the worker to the organization.</p>
+            </div>
+
+            {/* Error & Success Notification */}
+            {chwModalError && (
+              <div className="bg-red-950/40 border border-red-500/25 text-red-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{chwModalError}</span>
+              </div>
+            )}
+            {chwModalSuccess && (
+              <div className="bg-emerald-950/40 border border-emerald-500/25 text-emerald-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{chwModalSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleRegisterChw} className="space-y-6">
+              
+              {/* Group 1: General Info */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">General Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Full Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Firstname Lastname"
+                      value={chwForm.fullname}
+                      onChange={(e) => setChwForm({...chwForm, fullname: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-semibold">Gender *</label>
+                      <select
+                        value={chwForm.gender}
+                        onChange={(e) => setChwForm({...chwForm, gender: e.target.value})}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                      >
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-semibold">National ID *</label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={13}
+                        placeholder="13-digit ID"
+                        value={chwForm.id_number}
+                        onChange={(e) => setChwForm({...chwForm, id_number: e.target.value.replace(/\D/g, '')})}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Employee ID *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. CHW-102"
+                      value={chwForm.employee_id}
+                      onChange={(e) => setChwForm({...chwForm, employee_id: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Phone Number *</label>
+                    <input
+                      type="tel"
+                      required
+                      maxLength={10}
+                      placeholder="10-digit phone"
+                      value={chwForm.phone_number}
+                      onChange={(e) => setChwForm({...chwForm, phone_number: e.target.value.replace(/\D/g, '')})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Email Address</label>
+                    <input
+                      type="email"
+                      placeholder="chw@hospital.com"
+                      value={chwForm.email}
+                      onChange={(e) => setChwForm({...chwForm, email: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Portal Password *</label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Choose password"
+                      value={chwForm.password}
+                      onChange={(e) => setChwForm({...chwForm, password: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Group 2: Address Info */}
+              <div className="space-y-4 pt-2">
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Address Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">House Number *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 14B"
+                      value={chwForm.house_number}
+                      onChange={(e) => setChwForm({...chwForm, house_number: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Suburb *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Melville"
+                      value={chwForm.surbub}
+                      onChange={(e) => setChwForm({...chwForm, surbub: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Municipality *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. City of Joburg"
+                      value={chwForm.municipality}
+                      onChange={(e) => setChwForm({...chwForm, municipality: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">City *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Johannesburg"
+                      value={chwForm.city}
+                      onChange={(e) => setChwForm({...chwForm, city: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-4 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => { setIsChwModalOpen(false); setChwModalError(''); setChwModalSuccess(''); }}
+                  className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={chwModalLoading}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  {chwModalLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+                  {chwModalLoading ? 'Registering CHW...' : 'Register CHW'}
                 </button>
               </div>
 
