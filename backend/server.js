@@ -1,33 +1,38 @@
 import express from 'express';
-// import { Server } from 'socket.io';
+import { Server } from 'socket.io';
 import http from 'http';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
-// Import your existing routes
+// Import routes
 import authRoutes from './routes/auth.js';
 import patientsRoutes from './routes/patients.js';
 import chwsRoutes from './routes/chws.js';
 import staffRoutes from './routes/staff.js';
 import referralsRoutes from './routes/referrals.js';
 import appointmentsRoutes from './routes/appointments.js';
-import dotenv from 'dotenv'
+import chatRoutes from './routes/chat.js';
+import dotenv from 'dotenv';
 
-dotenv.config()
+dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
 const allowedOrigins = [
   "http://localhost:5173",
-  "http://127.0.0.1:5174"
+  "http://127.0.0.1:5174",
+  "http://localhost:5174",
+  "http://127.0.0.1:5173"
 ];
 
-// const io = new Server(server, {
-//   cors: {
-//     origin: allowedOrigins,
-//     credentials: true,
-//   },
-// });
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+  },
+});
+
+app.set('socketio', io);
 
 // ========== EXISTING MIDDLEWARE ==========
 app.use(cors({
@@ -44,75 +49,47 @@ app.use('/api/auth', chwsRoutes);
 app.use('/api/auth', staffRoutes);
 app.use('/api/auth', referralsRoutes);
 app.use('/api/auth', appointmentsRoutes);
+app.use('/api/auth', chatRoutes);
 
-// ========== SOCKET.IO CODE (ADD THIS) ==========
-// Store online users and their socket IDs
-// const onlineUsers = new Map(); // userId -> socketId
+// ========== SOCKET.IO CODE ==========
+io.on('connection', (socket) => {
+  console.log('New Socket.io client connected:', socket.id);
 
-// io.on('connection', (socket) => {
-//   console.log('New client connected:', socket.id);
+  socket.on('register-user', (data) => {
+    const { userId, role, organization, staffRole } = data;
+    if (!userId || !role || !organization) {
+      console.log('Registration data incomplete:', data);
+      return;
+    }
 
-//   // Register user with their userId
-//   socket.on('register-user', (userId) => {
-//     onlineUsers.set(userId, socket.id);
-//     console.log(`User ${userId} registered with socket ${socket.id}`);
-//   });
+    console.log(`Socket register-user: user=${userId}, role=${role}, org=${organization}, staffRole=${staffRole}`);
 
-//   // Handle comment notifications
-//   socket.on('send-comment', (data) => {
-//     const { projectOwnerId, projectTitle, commenterName, commenterEmail, commentText, projectId } = data;
-    
-//     const ownerSocketId = onlineUsers.get(projectOwnerId);
-    
-//     if (ownerSocketId) {
-//       io.to(ownerSocketId).emit('new-notification', {
-//         type: 'comment',
-//         title: 'New Comment',
-//         message: `${commenterName} <${commenterEmail}> commented on your project "${projectTitle}": "${commentText.substring(0, 50)}${commentText.length > 50 ? '...' : ''}"`,
-//         projectId: projectId,
-//         projectTitle: projectTitle,
-//         timestamp: new Date().toISOString()
-//       });
-//       console.log(`Comment notification sent to user ${projectOwnerId}`);
-//     }
-//   });
+    // Join organization room
+    socket.join(`org_${organization}`);
 
-//   // Handle raise hand / collaboration request
-//   socket.on('raise-hand', (data) => {
-//     const { projectOwnerId, projectTitle, requesterName, requesterEmail, projectId } = data;
-    
-//     const ownerSocketId = onlineUsers.get(projectOwnerId);
-    
-//     if (ownerSocketId) {
-//       io.to(ownerSocketId).emit('new-notification', {
-//         type: 'collaboration',
-//         title: 'Collaboration Request',
-//         message: `${requesterName}<${requesterEmail}> is interested in collaborating on your project "${projectTitle}"`,
-//         projectId: projectId,
-//         projectTitle: projectTitle,
-//         requesterName: requesterName,
-//         timestamp: new Date().toISOString()
-//       });
-//       console.log(`Collaboration request sent to user ${projectOwnerId}`);
-//     }
-//   });
+    // Join individual user room
+    socket.join(`org_${organization}_user_${role}_${userId}`);
 
-//   // Handle mark as read
-//   socket.on('mark-read', (notificationId) => {
-//     console.log(`Notification ${notificationId} marked as read`);
-//   });
+    // Join role-specific room
+    if (role === 'staff') {
+      const normalizedStaffRole = staffRole ? staffRole.toLowerCase().replace('/', '_').replace(' ', '_') : 'doctor_nurse';
+      socket.join(`org_${organization}_role_${normalizedStaffRole}`);
+      socket.join(`org_${organization}_staff`);
+    } else if (role === 'chw') {
+      socket.join(`org_${organization}_role_chw`);
+      socket.join(`org_${organization}_staff`);
+    } else if (role === 'admin') {
+      socket.join(`org_${organization}_role_admin`);
+      socket.join(`org_${organization}_staff`);
+    } else if (role === 'patient') {
+      socket.join(`org_${organization}_role_patient`);
+    }
+  });
 
-//   // Handle disconnection
-//   socket.on('disconnect', () => {
-//     for (const [userId, socketId] of onlineUsers.entries()) {
-//       if (socketId === socket.id) {
-//         onlineUsers.delete(userId);
-//         console.log(`User ${userId} disconnected`);
-//         break;
-//       }
-//     }
-//   });
-// });
+  socket.on('disconnect', () => {
+    console.log('Socket.io client disconnected:', socket.id);
+  });
+});
 // ========== END OF SOCKET.IO CODE ==========
 
 // Basic test route

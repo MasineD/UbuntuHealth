@@ -158,7 +158,12 @@ router.get('/my-organization', protect, async (req, res) => {
         if (req.user.role === 'admin') {
             organization = req.user.organization;
         } else {
-            const table = req.user.role === 'chw' ? 'users.comm_health_workers' : 'users.clinical_staff';
+            let table = 'users.clinical_staff';
+            if (req.user.role === 'chw') {
+                table = 'users.comm_health_workers';
+            } else if (req.user.role === 'patient') {
+                table = 'users.patients';
+            }
             const result = await pool.query(
                 `SELECT a.organization 
                  FROM ${table} u 

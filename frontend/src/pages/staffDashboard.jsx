@@ -3,8 +3,10 @@ import axios from 'axios';
 import { 
   LayoutDashboard, Users, Clock, LogOut, Loader2, ShieldCheck, Bell, 
   CheckCircle, User as UserIcon, Heart, Calendar, Activity, 
-  ClipboardList, MapPin, Search, Plus, Save, Trash2, X, ArrowLeftRight
+  ClipboardList, MapPin, Search, Plus, Save, Trash2, X, ArrowLeftRight, MessageSquare, Send
 } from 'lucide-react';
+import { io } from 'socket.io-client';
+import ChatRoom from '../components/ChatRoom';
 
 const api = axios.create({
   baseURL: 'http://localhost:5000/api',
@@ -19,6 +21,75 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
   const [patients, setPatients] = useState([]);
   const [loadingPatients, setLoadingPatients] = useState(false);
   const [vitalsSearchQuery, setVitalsSearchQuery] = useState('');
+
+  // Socket & Notifications state
+  const [socket, setSocket] = useState(null);
+  const [toasts, setToasts] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
+
+  useEffect(() => {
+    let orgName = '';
+    const initSocket = async () => {
+      try {
+        const orgRes = await api.get('/auth/my-organization');
+        orgName = orgRes.data.organization;
+        if (!orgName) return;
+
+        const socketInstance = io('http://localhost:5000');
+        
+        socketInstance.on('connect', () => {
+          socketInstance.emit('register-user', {
+            userId: user.id,
+            role: user.role,
+            organization: orgName,
+            staffRole: user.staff_role
+          });
+        });
+
+        socketInstance.on('new-notification', (data) => {
+          const newToast = {
+            id: Date.now() + Math.random(),
+            type: data.type === 'referral_created' ? 'referral' : 'appointment',
+            title: data.title,
+            message: data.message
+          };
+          setToasts(prev => [...prev, newToast]);
+          setNotifications(prev => [data, ...prev]);
+
+          setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== newToast.id));
+          }, 5000);
+        });
+
+        socketInstance.on('new-message', (msg) => {
+          const isFromSelf = msg.sender_id.toString() === user.id.toString() && msg.sender_role === user.role;
+          if (!isFromSelf) {
+            const newToast = {
+              id: Date.now() + Math.random(),
+              type: 'message',
+              title: `New Message from ${msg.sender_name}`,
+              message: msg.message_text.length > 60 ? msg.message_text.substring(0, 60) + '...' : msg.message_text
+            };
+            setToasts(prev => [...prev, newToast]);
+            setTimeout(() => {
+              setToasts(prev => prev.filter(t => t.id !== newToast.id));
+            }, 5000);
+          }
+        });
+
+        setSocket(socketInstance);
+
+        return () => {
+          socketInstance.disconnect();
+        };
+      } catch (err) {
+        console.error('Failed to initialize socket:', err);
+      }
+    };
+
+    initSocket();
+  }, [user]);
 
   // Appointments State
   const [appointments, setAppointments] = useState([]);
@@ -372,7 +443,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
     { id: 'overview', name: 'Overview', icon: LayoutDashboard },
     { id: 'appointments', name: 'Appointments', icon: Calendar },
     { id: 'vitals', name: 'Patient Vitals', icon: Heart },
-    { id: 'referrals', name: 'Referrals', icon: ArrowLeftRight }
+    { id: 'referrals', name: 'Referrals', icon: ArrowLeftRight },
+    { id: 'chat', name: 'Chat Room', icon: MessageSquare }
   ];
 
   const filteredPatients = orgPatientsList.filter(p => 
@@ -445,6 +517,11 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                 >
                   <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
                   {item.name}
+                  {item.id === 'chat' && notifications.some(n => n.type === 'message') && (
+                    <span className="ml-auto bg-emerald-500 text-slate-950 rounded-full text-[10px] font-extrabold px-1.5 py-0.5 animate-pulse">
+                      •
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -487,10 +564,50 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
               Clinical Session Secure
             </div>
             
-            <button className="h-9 w-9 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-200 transition-colors relative">
-              <Bell className="h-4.5 w-4.5" />
-              <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-emerald-500 rounded-full" />
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => setShowNotificationsDropdown(!showNotificationsDropdown)}
+                className="h-9 w-9 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-200 transition-colors relative"
+              >
+                <Bell className="h-4.5 w-4.5" />
+                {notifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-emerald-500 text-slate-950 rounded-full text-[9px] font-extrabold h-4 w-4 flex items-center justify-center animate-pulse">
+                    {notifications.length}
+                  </span>
+                )}
+              </button>
+              
+              {showNotificationsDropdown && (
+                <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-850 rounded-2xl p-4 shadow-2xl z-50 text-left animate-slideIn">
+                  <div className="flex justify-between items-center pb-2.5 border-b border-slate-800">
+                    <span className="text-xs font-bold text-slate-200">Alerts & Notifications</span>
+                    <button 
+                      onClick={() => setNotifications([])}
+                      className="text-[10px] text-emerald-400 hover:text-emerald-350 font-semibold"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                  <div className="mt-2.5 space-y-2.5 max-h-60 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <p className="text-[11px] text-slate-500 text-center py-4 italic">No new notifications</p>
+                    ) : (
+                      notifications.map((n, idx) => (
+                        <div key={idx} className="p-2 bg-slate-950/40 rounded-xl border border-slate-800">
+                          <div className="flex justify-between items-start">
+                            <span className="text-xs font-bold text-slate-300">{n.title}</span>
+                            <span className="text-[9px] text-slate-500 font-mono">
+                              {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">{n.message}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -944,6 +1061,11 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* ================= PAGE: CHAT ROOM ================= */}
+          {activeTab === 'chat' && (
+            <ChatRoom user={user} socket={socket} />
           )}
 
         </section>
@@ -1455,6 +1577,34 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
           </div>
         </div>
       )}
+
+      {/* Toast Container */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 max-w-sm w-full pointer-events-none">
+        {toasts.map(toast => (
+          <div key={toast.id} className="pointer-events-auto bg-slate-900/90 border border-slate-800 backdrop-blur-md rounded-2xl p-4 shadow-2xl flex items-start gap-3.5 animate-slideIn">
+            <div className={`p-2 rounded-xl shrink-0 ${
+              toast.type === 'message' 
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                : toast.type === 'referral' 
+                  ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20'
+                  : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+            }`}>
+              {toast.type === 'message' ? <MessageSquare className="h-4 w-4" /> : toast.type === 'referral' ? <Activity className="h-4 w-4" /> : <Calendar className="h-4 w-4" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-bold text-slate-200">{toast.title}</h4>
+              <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">{toast.message}</p>
+            </div>
+            <button 
+              onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+              className="text-slate-500 hover:text-slate-350 transition-colors text-sm font-bold align-top leading-none"
+            >
+              &times;
+            </button>
+          </div>
+        ))}
+      </div>
+
     </div>
   );
 }

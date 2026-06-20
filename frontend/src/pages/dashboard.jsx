@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { LayoutDashboard, Users, Calendar, ArrowLeftRight, MessageSquare, LogOut, Loader2,ShieldCheck,Search,Bell,Plus,Send,User as UserIcon,CheckCircle,FileText,Clock,Menu,ChevronRight,X
+import { LayoutDashboard, Users, Calendar, ArrowLeftRight, MessageSquare, LogOut, Loader2,ShieldCheck,Search,Bell,Plus,Send,User as UserIcon,CheckCircle,FileText,Clock,Menu,ChevronRight,X, Activity
 } from 'lucide-react';
+import { io } from 'socket.io-client';
+import ChatRoom from '../components/ChatRoom';
 
 const api = axios.create({
   baseURL: 'http://localhost:5000/api',
@@ -16,28 +18,74 @@ function Dashboard({ user, onLogout, actionLoading }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [staffSearchQuery, setStaffSearchQuery] = useState('');
   
-  // Chat Room state simulation
-  const [chatMessages, setChatMessages] = useState([
-    { id: 1, sender: 'Dr. Sarah Jenkins', role: 'Cardiologist', text: 'Has patient John Doe completed his routine blood work?', time: '09:30 AM' },
-    { id: 2, sender: 'You', role: 'Super Admin', text: 'Yes, John Doe’s lipid panel results are uploaded in records.', time: '09:35 AM' },
-    { id: 3, sender: 'Dr. Sarah Jenkins', role: 'Cardiologist', text: 'Perfect. I will review them before our 2 PM appointment.', time: '09:37 AM' },
-    { id: 4, sender: 'Chw. Musa Dube', role: 'Community Health Worker', text: 'Visited patient Jane Smith today. Routine checks are normal, medication tasks completed.', time: '10:15 AM' }
-  ]);
-  const [newMessage, setNewMessage] = useState('');
+  // Socket & Notifications state
+  const [socket, setSocket] = useState(null);
+  const [toasts, setToasts] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
 
-  const handleSendMessage = (e) => {
-    e.preventDefault();
-    if (!newMessage.trim()) return;
-    const msg = {
-      id: chatMessages.length + 1,
-      sender: 'You',
-      role: 'Super Admin',
-      text: newMessage,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  useEffect(() => {
+    let orgName = '';
+    const initSocket = async () => {
+      try {
+        const orgRes = await api.get('/auth/my-organization');
+        orgName = orgRes.data.organization;
+        if (!orgName) return;
+
+        const socketInstance = io('http://localhost:5000');
+        
+        socketInstance.on('connect', () => {
+          socketInstance.emit('register-user', {
+            userId: user.id,
+            role: user.role,
+            organization: orgName,
+            staffRole: user.staff_role
+          });
+        });
+
+        socketInstance.on('new-notification', (data) => {
+          const newToast = {
+            id: Date.now() + Math.random(),
+            type: data.type === 'referral_created' ? 'referral' : 'appointment',
+            title: data.title,
+            message: data.message
+          };
+          setToasts(prev => [...prev, newToast]);
+          setNotifications(prev => [data, ...prev]);
+
+          setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== newToast.id));
+          }, 5000);
+        });
+
+        socketInstance.on('new-message', (msg) => {
+          const isFromSelf = msg.sender_id.toString() === user.id.toString() && msg.sender_role === user.role;
+          if (!isFromSelf) {
+            const newToast = {
+              id: Date.now() + Math.random(),
+              type: 'message',
+              title: `New Message from ${msg.sender_name}`,
+              message: msg.message_text.length > 60 ? msg.message_text.substring(0, 60) + '...' : msg.message_text
+            };
+            setToasts(prev => [...prev, newToast]);
+            setTimeout(() => {
+              setToasts(prev => prev.filter(t => t.id !== newToast.id));
+            }, 5000);
+          }
+        });
+
+        setSocket(socketInstance);
+
+        return () => {
+          socketInstance.disconnect();
+        };
+      } catch (err) {
+        console.error('Failed to initialize socket:', err);
+      }
     };
-    setChatMessages([...chatMessages, msg]);
-    setNewMessage('');
-  };
+
+    initSocket();
+  }, [user]);
 
   const calculateAgeFromId = (idNumber) => {
     if (!idNumber || idNumber.length !== 13) return 30;
@@ -748,9 +796,9 @@ function Dashboard({ user, onLogout, actionLoading }) {
                 >
                   <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
                   {item.name}
-                  {item.id === 'chat' && (
+                  {item.id === 'chat' && notifications.some(n => n.type === 'message') && (
                     <span className="ml-auto bg-emerald-500 text-slate-950 rounded-full text-[10px] font-extrabold px-1.5 py-0.5 animate-pulse">
-                      4
+                      •
                     </span>
                   )}
                 </button>
@@ -803,10 +851,50 @@ function Dashboard({ user, onLogout, actionLoading }) {
             </div>
 
             {/* Notification Badge */}
-            <button className="h-9 w-9 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-200 transition-colors relative">
-              <Bell className="h-4.5 w-4.5" />
-              <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-emerald-500 rounded-full" />
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => setShowNotificationsDropdown(!showNotificationsDropdown)}
+                className="h-9 w-9 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-200 transition-colors relative"
+              >
+                <Bell className="h-4.5 w-4.5" />
+                {notifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-emerald-500 text-slate-950 rounded-full text-[9px] font-extrabold h-4 w-4 flex items-center justify-center animate-pulse">
+                    {notifications.length}
+                  </span>
+                )}
+              </button>
+              
+              {showNotificationsDropdown && (
+                <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-850 rounded-2xl p-4 shadow-2xl z-50 text-left animate-slideIn">
+                  <div className="flex justify-between items-center pb-2.5 border-b border-slate-800">
+                    <span className="text-xs font-bold text-slate-200">Alerts & Notifications</span>
+                    <button 
+                      onClick={() => setNotifications([])}
+                      className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                  <div className="mt-2.5 space-y-2.5 max-h-60 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <p className="text-[11px] text-slate-500 text-center py-4 italic">No new notifications</p>
+                    ) : (
+                      notifications.map((n, idx) => (
+                        <div key={idx} className="p-2 bg-slate-950/40 rounded-xl border border-slate-800">
+                          <div className="flex justify-between items-start">
+                            <span className="text-xs font-bold text-slate-300">{n.title}</span>
+                            <span className="text-[9px] text-slate-505 font-mono">
+                              {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">{n.message}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -1514,61 +1602,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
 
           {/* ================= PAGE: CHAT ROOM ================= */}
           {activeTab === 'chat' && (
-            <div className="bg-slate-900/60 border border-slate-800 rounded-3xl h-[calc(100vh-14rem)] flex flex-col justify-between overflow-hidden">
-              
-              {/* Message Header info */}
-              <div className="p-4 border-b border-slate-800/80 bg-slate-950/20 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-2 w-2 bg-emerald-500 rounded-full animate-ping" />
-                  <span className="text-xs text-slate-300 font-semibold">Active staff discussion channel</span>
-                </div>
-                <span className="text-slate-500 text-xs font-mono">Channel: #general-staff</span>
-              </div>
-
-              {/* Message History */}
-              <div className="flex-1 p-6 space-y-4 overflow-y-auto bg-slate-950/10">
-                {chatMessages.map((msg) => {
-                  const isSelf = msg.sender === 'You';
-                  return (
-                    <div 
-                      key={msg.id} 
-                      className={`flex flex-col max-w-[70%] space-y-1 ${isSelf ? 'ml-auto items-end' : 'mr-auto items-start'}`}
-                    >
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-xs font-bold text-slate-300">{msg.sender}</span>
-                        <span className="text-[10px] text-slate-500">{msg.role}</span>
-                      </div>
-                      <div className={`p-3.5 rounded-2xl text-sm leading-relaxed ${
-                        isSelf 
-                          ? 'bg-gradient-to-tr from-emerald-500 to-teal-500 text-slate-950 font-medium rounded-tr-none' 
-                          : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'
-                      }`}>
-                        {msg.text}
-                      </div>
-                      <span className="text-[9px] text-slate-600 font-mono">{msg.time}</span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Message Input Box */}
-              <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-800 bg-slate-900 flex gap-3">
-                <input
-                  type="text"
-                  placeholder="Type a clinical update or query..."
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  className="flex-1 bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-all duration-300"
-                />
-                <button
-                  type="submit"
-                  className="h-12 w-12 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 hover:brightness-110 active:scale-95 transition-all duration-300"
-                >
-                  <Send className="h-5 w-5" />
-                </button>
-              </form>
-
-            </div>
+            <ChatRoom user={user} socket={socket} />
           )}
 
         </section>
@@ -2767,6 +2801,34 @@ function Dashboard({ user, onLogout, actionLoading }) {
           </div>
         </div>
       )}
+
+      {/* Toast Container */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 max-w-sm w-full pointer-events-none">
+        {toasts.map(toast => (
+          <div key={toast.id} className="pointer-events-auto bg-slate-900/90 border border-slate-800 backdrop-blur-md rounded-2xl p-4 shadow-2xl flex items-start gap-3.5 animate-slideIn">
+            <div className={`p-2 rounded-xl shrink-0 ${
+              toast.type === 'message' 
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                : toast.type === 'referral' 
+                  ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20'
+                  : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+            }`}>
+              {toast.type === 'message' ? <MessageSquare className="h-4 w-4" /> : toast.type === 'referral' ? <Activity className="h-4 w-4" /> : <Calendar className="h-4 w-4" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-bold text-slate-200">{toast.title}</h4>
+              <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">{toast.message}</p>
+            </div>
+            <button 
+              onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+              className="text-slate-500 hover:text-slate-300 transition-colors text-sm font-bold align-top leading-none"
+            >
+              &times;
+            </button>
+          </div>
+        ))}
+      </div>
+
     </div>
   );
 }
