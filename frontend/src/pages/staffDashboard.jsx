@@ -584,7 +584,7 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
         <div className="absolute top-[-15%] right-[-15%] w-[600px] h-[600px] bg-emerald-950/10 rounded-full blur-[140px] pointer-events-none" />
         
         {/* Top Header Bar */}
-        <header className="h-20 border-b border-slate-800/80 px-8 flex items-center justify-between shrink-0 bg-slate-900/40 backdrop-blur-md relative z-10">
+        <header className="h-20 border-b border-slate-800/80 px-8 flex items-center justify-between shrink-0 bg-slate-900/40 backdrop-blur-md relative z-20">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold text-white tracking-wide capitalize">
               {activeTab === 'vitals' ? 'Patient Vitals & Records' : activeTab === 'appointments' ? 'My Appointments Schedule' : activeTab}

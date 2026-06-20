@@ -165,285 +165,308 @@ function Home({
   );
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-12 pb-16">
+    <div className="w-full max-w-6xl mx-auto space-y-12 pb-16 px-4">
       
-      {/* ================= SECTION 1: HERO / BRANDING ================= */}
-      <section className="text-center space-y-6 pt-8 animate-fadeIn">
-        <div className="flex items-center justify-center gap-3">
-          <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/25">
-            <Activity className="h-6 w-6 text-slate-950 stroke-[2.5]" />
-          </div>
-          <span className="font-extrabold text-3xl tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
-            UbuntuHealth
-          </span>
+      {/* BRAND HEADER */}
+      <div className="flex items-center gap-3 pt-6">
+        <div className="bg-emerald-500 h-10 w-10 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/10">
+          <HeartPulse className="h-5.5 w-5.5 text-slate-950 fill-slate-950 stroke-[2.5]" />
         </div>
+        <span className="text-2xl font-black tracking-tight text-white font-sans select-none">
+          Ubuntu<span className="text-emerald-500">Health</span>
+        </span>
+      </div>
+
+      {/* HERO & BRANDING & LOGIN SECTION */}
+      <div className="w-full min-h-[75vh] flex flex-col lg:flex-row items-center justify-between gap-12 lg:gap-8 py-8">
         
-        <div className="space-y-3">
-          <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white leading-tight">
-            Universal Healthcare Booking Portal <br />
-            <span className="bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">Accessible to Everyone.</span>
+        {/* LEFT COLUMN: Hero content */}
+        <div className="lg:w-1/2 flex flex-col justify-center space-y-8 text-left animate-fadeIn">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white leading-tight font-sans tracking-tight">
+            Healthcare for Everyone, <br />
+            <span className="text-teal-500">Everywhere</span>
           </h1>
-          <p className="text-slate-400 text-sm md:text-base max-w-2xl mx-auto leading-relaxed">
-            UbuntuHealth bridges the gap in clinical care. Request instant consultations with qualified clinicians, Refill prescriptions, and access medical assistance — whether registered or visiting.
+          
+          <p className="text-slate-400 text-sm md:text-base leading-relaxed max-w-lg">
+            Providing accessible, digital healthcare across communities. Check records, consult online, and log clinic referrals securely.
           </p>
+
+          <hr className="border-slate-900 w-full" />
+
+          <div className="space-y-4">
+            <span className="text-[10px] text-slate-500 font-bold tracking-wider uppercase block">
+              TRUSTED BY:
+            </span>
+            <div className="flex flex-wrap gap-3">
+              {[
+                { name: 'Helen Joseph' },
+                { name: 'MediClinic' },
+                { name: 'Unjani Clinic' },
+                { name: 'health' },
+                { name: 'tshwane' }
+              ].map((clinic, index) => (
+                <div 
+                  key={index}
+                  className="inline-flex items-center gap-2 bg-slate-900/90 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-350 shadow-md transition-all hover:border-slate-700"
+                >
+                  <Building2 className="text-emerald-500 h-4 w-4" />
+                  <span>{clinic.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
-        <div className="flex justify-center gap-6 pt-2">
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400/80 bg-slate-900/60 border border-slate-800 rounded-full px-4 py-2 shadow-inner">
-            <ShieldCheck className="h-4.5 w-4.5 text-emerald-500" />
-            POPI Compliant & Secure
-          </div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400/80 bg-slate-900/60 border border-slate-800 rounded-full px-4 py-2 shadow-inner">
-            <Sparkles className="h-4.5 w-4.5 text-teal-400" />
-            Instant Clinician Routing
-          </div>
-        </div>
-      </section>
-
-      {/* ================= SECTION 3: AUTHENTICATION / ACCESS ================= */}
-      <section className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 md:p-10 space-y-6 shadow-2xl relative transition-all duration-300 hover:border-slate-700/80">
-        <div className="absolute bottom-0 left-0 h-48 w-48 bg-teal-500/5 rounded-full blur-[80px] pointer-events-none" />
-
-        {user ? (
-          /* Currently Logged In view */
-          <div className="space-y-6">
-            <div className="border-b border-slate-800 pb-5">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
-                  <User className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-white font-sans">Active User Session</h2>
-                  <p className="text-slate-400 text-xs mt-0.5">Manage your credentialed access to UbuntuHealth</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 bg-slate-950/60 border border-slate-850 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div className="space-y-1">
-                <h3 className="text-base font-bold text-slate-100">{user.name || user.fullname}</h3>
-                <p className="text-xs text-slate-400">{user.email || 'No email registered'}</p>
-                <span className="inline-block bg-teal-500/10 border border-teal-500/25 text-teal-400 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded mt-1.5">
-                  {user.role} Account
-                </span>
-              </div>
-
-              <div className="flex gap-3 w-full md:w-auto">
-                <button
-                  onClick={() => setAuthMode('dashboard')}
-                  className="flex-1 md:flex-initial py-2.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-110 active:scale-[0.98] text-slate-950 font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-1.5"
-                >
-                  <LayoutDashboard className="h-4 w-4" /> Go to Dashboard
-                </button>
-                <button
-                  onClick={onLogout}
-                  disabled={actionLoading}
-                  className="flex-1 md:flex-initial py-2.5 px-4 bg-slate-950 border border-slate-800 hover:border-red-500/20 hover:text-red-400 text-slate-400 font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
-                >
-                  {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} Sign Out
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* Sign In / Register Forms */
-          <div className="space-y-6">
-            <div className="border-b border-slate-800 pb-5">
-              <div className="flex bg-slate-950/80 p-1.5 rounded-xl border border-slate-850 max-w-sm mx-auto">
-                <button
-                  onClick={() => setAuthMode('login')}
-                  className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition-all duration-300 ${
-                    authMode === 'login' 
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md' 
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Sign In
-                </button>
-                <button
-                  onClick={() => setAuthMode('register')}
-                  className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition-all duration-300 ${
-                    authMode === 'register' 
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md' 
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Register Admin
-                </button>
-              </div>
-            </div>
-
-            {error && (
-              <div className="flex items-center gap-3 p-4 bg-red-950/40 border border-red-500/30 rounded-xl text-red-300 text-xs">
-                <AlertCircle className="h-5 w-5 shrink-0 text-red-400" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            {success && (
-              <div className="flex items-center gap-3 p-4 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs">
-                <CheckCircle className="h-5 w-5 shrink-0 text-emerald-400" />
-                <span>{success}</span>
-              </div>
-            )}
-
-            {/* ===== SIGN IN FORM ===== */}
-            {authMode === 'login' && (
-              <form onSubmit={onLoginSubmit} className="space-y-5 max-w-md mx-auto">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-300 tracking-wider uppercase">Identity / National ID</label>
-                  <div className="relative">
-                    <User className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-500" />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Enter your registered identity number"
-                      value={loginInput.identity}
-                      onChange={(e) => setLoginInput({ ...loginInput, identity: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-xl py-3 pl-11 pr-4 text-sm text-slate-100 placeholder-slate-550 outline-none transition-all duration-300"
-                    />
+        {/* RIGHT COLUMN: Authentication Card */}
+        <div className="w-full lg:w-[460px] shrink-0">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6 relative transition-all duration-300 hover:border-slate-700/80">
+            
+            {user ? (
+              /* Logged In View */
+              <div className="space-y-6">
+                <div className="border-b border-slate-900 pb-5 text-center">
+                  <div className="h-14 w-14 rounded-2xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 mx-auto mb-3">
+                    <User className="h-6 w-6" />
                   </div>
+                  <h2 className="text-xl font-bold text-white">Active Session</h2>
+                  <p className="text-slate-500 text-xs mt-1">Manage your credentialed access</p>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-300 tracking-wider uppercase">Password</label>
-                  <div className="relative">
-                    <Lock className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-500" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      placeholder="••••••••"
-                      value={loginInput.password}
-                      onChange={(e) => setLoginInput({ ...loginInput, password: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-xl py-3 pl-11 pr-11 text-slate-100 placeholder-slate-550 outline-none transition-all duration-300"
-                    />
+                <div className="p-5 bg-slate-950 border border-slate-900 rounded-2xl flex flex-col gap-4">
+                  <div className="space-y-1 text-center">
+                    <h3 className="text-sm font-bold text-slate-200">{user.name || user.fullname}</h3>
+                    <p className="text-xs text-slate-500">{user.email || 'No email registered'}</p>
+                    <span className="inline-block bg-teal-500/10 border border-teal-500/20 text-teal-400 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded mt-2">
+                      {user.role} Account
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-2 pt-2">
                     <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-3 text-slate-550 hover:text-slate-300 transition-colors"
+                      onClick={() => setAuthMode('dashboard')}
+                      className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 hover:brightness-110 active:scale-[0.98] text-slate-950 font-black text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                      <LayoutDashboard className="h-4 w-4" /> Go to Dashboard
+                    </button>
+                    <button
+                      onClick={onLogout}
+                      disabled={actionLoading}
+                      className="w-full py-3 bg-slate-950 border border-slate-900 hover:border-red-500/20 hover:text-red-400 text-slate-400 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                    >
+                      {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} Sign Out
                     </button>
                   </div>
                 </div>
+              </div>
+            ) : (
+              /* Forms: Login / Register */
+              <div className="space-y-6">
+                
+                {/* Error and Success alerts */}
+                {error && (
+                  <div className="flex items-center gap-3 p-4 bg-red-950/40 border border-red-500/20 rounded-xl text-red-300 text-xs">
+                    <AlertCircle className="h-5 w-5 shrink-0 text-red-400" />
+                    <span>{error}</span>
+                  </div>
+                )}
 
-                <button
-                  type="submit"
-                  disabled={actionLoading}
-                  className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-extrabold text-sm tracking-wide rounded-xl hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {actionLoading && <Loader2 className="h-4 w-4 animate-spin text-slate-950" />}
-                  {actionLoading ? 'Verifying...' : 'Sign In'}
-                </button>
-              </form>
+                {success && (
+                  <div className="flex items-center gap-3 p-4 bg-emerald-950/40 border border-emerald-500/20 rounded-xl text-emerald-300 text-xs">
+                    <CheckCircle className="h-5 w-5 shrink-0 text-emerald-400" />
+                    <span>{success}</span>
+                  </div>
+                )}
+
+                {authMode === 'login' && (
+                  <form onSubmit={onLoginSubmit} className="space-y-5">
+                    <h2 className="text-xl font-bold text-white text-center tracking-tight font-sans">Sign In</h2>
+                    
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-slate-500 font-bold tracking-wider uppercase block">ID NUMBER</label>
+                      <div className="relative">
+                        <Mail className="absolute left-4 top-3.5 h-4.5 w-4.5 text-slate-500" />
+                        <input
+                          type="text"
+                          required
+                          placeholder="Enter identity number"
+                          value={loginInput.identity}
+                          onChange={(e) => setLoginInput({ ...loginInput, identity: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-900 focus:border-emerald-500/50 rounded-xl py-3 pl-12 pr-4 text-sm text-slate-200 placeholder-slate-600 outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-slate-500 font-bold tracking-wider uppercase block">PASSWORD</label>
+                      <div className="relative">
+                        <Lock className="absolute left-4 top-3.5 h-4.5 w-4.5 text-slate-500" />
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          required
+                          placeholder="Enter password"
+                          value={loginInput.password}
+                          onChange={(e) => setLoginInput({ ...loginInput, password: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-900 focus:border-emerald-500/50 rounded-xl py-3 pl-12 pr-12 text-sm text-slate-200 placeholder-slate-600 outline-none transition-all"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-4 top-3 text-slate-500 hover:text-slate-300 transition-colors"
+                        >
+                          {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <a className="text-[10px] text-slate-500 hover:text-emerald-500 transition-colors cursor-pointer select-none">
+                        Forgot password?
+                      </a>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={actionLoading}
+                      className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 hover:brightness-110 active:scale-[0.98] text-slate-950 font-extrabold text-sm rounded-2xl transition-all shadow-lg shadow-emerald-950/20 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {actionLoading && <Loader2 className="h-4 w-4 animate-spin text-slate-950" />}
+                      {actionLoading ? 'Verifying...' : 'Sign In'}
+                    </button>
+
+                    <p className="text-[11px] text-slate-500 text-center mt-4">
+                      Don't have an account?{' '}
+                      <span 
+                        onClick={() => setAuthMode('register')} 
+                        className="text-emerald-500 font-bold hover:underline cursor-pointer"
+                      >
+                        Sign Up
+                      </span>
+                    </p>
+                  </form>
+                )}
+
+                {authMode === 'register' && (
+                  <form onSubmit={onRegisterSubmit} className="space-y-4">
+                    <h2 className="text-xl font-bold text-white text-center tracking-tight font-sans">Register Admin</h2>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[9px] text-slate-500 font-bold tracking-wider uppercase block">Full Name</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. John Doe"
+                          value={registerInput.fullname}
+                          onChange={(e) => setRegisterInput({ ...registerInput, fullname: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-900 focus:border-emerald-500/50 rounded-xl py-2 px-3 text-xs text-slate-200 placeholder-slate-600 outline-none transition-all"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[9px] text-slate-500 font-bold tracking-wider uppercase block">Identity / Username</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Admin ID"
+                          value={registerInput.identity}
+                          onChange={(e) => setRegisterInput({ ...registerInput, identity: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-900 focus:border-emerald-500/50 rounded-xl py-2 px-3 text-xs text-slate-200 placeholder-slate-600 outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[9px] text-slate-500 font-bold tracking-wider uppercase block">Phone Number</label>
+                        <input
+                          type="tel"
+                          required
+                          placeholder="10-digit number"
+                          value={registerInput.phone_number}
+                          onChange={(e) => setRegisterInput({ ...registerInput, phone_number: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-900 focus:border-emerald-500/50 rounded-xl py-2 px-3 text-xs text-slate-200 placeholder-slate-600 outline-none transition-all"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[9px] text-slate-500 font-bold tracking-wider uppercase block">Email Address</label>
+                        <input
+                          type="email"
+                          required
+                          placeholder="admin@clinic.com"
+                          value={registerInput.email}
+                          onChange={(e) => setRegisterInput({ ...registerInput, email: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-900 focus:border-emerald-500/50 rounded-xl py-2 px-3 text-xs text-slate-200 placeholder-slate-600 outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[9px] text-slate-500 font-bold tracking-wider uppercase block">Organization</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Clinic name"
+                          value={registerInput.organization}
+                          onChange={(e) => setRegisterInput({ ...registerInput, organization: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-900 focus:border-emerald-500/50 rounded-xl py-2 px-3 text-xs text-slate-200 placeholder-slate-600 outline-none transition-all"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[9px] text-slate-500 font-bold tracking-wider uppercase block">Facility Code</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. FAC-99"
+                          value={registerInput.facility_code}
+                          onChange={(e) => setRegisterInput({ ...registerInput, facility_code: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-900 focus:border-emerald-500/50 rounded-xl py-2 px-3 text-xs text-slate-200 placeholder-slate-600 outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[9px] text-slate-500 font-bold tracking-wider uppercase block">Password</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="Choose password"
+                        value={registerInput.password}
+                        onChange={(e) => setRegisterInput({ ...registerInput, password: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-900 focus:border-emerald-500/50 rounded-xl py-2 px-3.5 text-xs text-slate-200 placeholder-slate-600 outline-none transition-all"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={actionLoading}
+                      className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 hover:brightness-110 active:scale-[0.98] text-slate-950 font-extrabold text-xs rounded-xl transition-all shadow-lg shadow-emerald-950/20 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {actionLoading && <Loader2 className="h-4 w-4 animate-spin text-slate-950" />}
+                      {actionLoading ? 'Creating Account...' : 'Register'}
+                    </button>
+
+                    <p className="text-[11px] text-slate-500 text-center mt-3">
+                      Already have an account?{' '}
+                      <span 
+                        onClick={() => setAuthMode('login')} 
+                        className="text-emerald-500 font-bold hover:underline cursor-pointer"
+                      >
+                        Sign In
+                      </span>
+                    </p>
+                  </form>
+                )}
+
+              </div>
             )}
 
-            {/* ===== REGISTER FORM ===== */}
-            {authMode === 'register' && (
-              <form onSubmit={onRegisterSubmit} className="space-y-5 max-w-xl mx-auto">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-300 tracking-wider uppercase">Full Name</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. John Doe"
-                      value={registerInput.fullname}
-                      onChange={(e) => setRegisterInput({ ...registerInput, fullname: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-xl py-2.5 px-3.5 text-sm text-slate-100 placeholder-slate-550 outline-none transition-all duration-300"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-300 tracking-wider uppercase">Identity / Username</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Unique admin identifier"
-                      value={registerInput.identity}
-                      onChange={(e) => setRegisterInput({ ...registerInput, identity: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-xl py-2.5 px-3.5 text-sm text-slate-100 placeholder-slate-550 outline-none transition-all duration-300"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-300 tracking-wider uppercase">Phone Number</label>
-                    <input
-                      type="tel"
-                      required
-                      placeholder="10-digit number"
-                      value={registerInput.phone_number}
-                      onChange={(e) => setRegisterInput({ ...registerInput, phone_number: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-xl py-2.5 px-3.5 text-sm text-slate-100 placeholder-slate-550 outline-none transition-all duration-300"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-300 tracking-wider uppercase">Email Address</label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="admin@organization.com"
-                      value={registerInput.email}
-                      onChange={(e) => setRegisterInput({ ...registerInput, email: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-xl py-2.5 px-3.5 text-sm text-slate-100 placeholder-slate-550 outline-none transition-all duration-300"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-300 tracking-wider uppercase">Organization Name</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. City General Clinic"
-                      value={registerInput.organization}
-                      onChange={(e) => setRegisterInput({ ...registerInput, organization: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-xl py-2.5 px-3.5 text-sm text-slate-100 placeholder-slate-550 outline-none transition-all duration-300"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-300 tracking-wider uppercase">Organization Facility Code</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. FAC-99"
-                      value={registerInput.facility_code}
-                      onChange={(e) => setRegisterInput({ ...registerInput, facility_code: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-xl py-2.5 px-3.5 text-sm text-slate-100 placeholder-slate-550 outline-none transition-all duration-300"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-300 tracking-wider uppercase">Password</label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Choose a secure password"
-                    value={registerInput.password}
-                    onChange={(e) => setRegisterInput({ ...registerInput, password: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-xl py-2.5 px-3.5 text-sm text-slate-100 placeholder-slate-550 outline-none transition-all duration-300"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={actionLoading}
-                  className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-extrabold text-sm tracking-wide rounded-xl hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {actionLoading && <Loader2 className="h-4 w-4 animate-spin text-slate-950" />}
-                  {actionLoading ? 'Creating Account...' : 'Register as Facility Admin'}
-                </button>
-              </form>
-            )}
           </div>
-        )}
-      </section>
+        </div>
+        
+      </div>
 
       {/* ================= SECTION 2: APPOINTMENT BOOKING ================= */}
       <section className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 md:p-10 space-y-6 shadow-2xl relative transition-all duration-300 hover:border-slate-700/80">
@@ -522,13 +545,6 @@ function Home({
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">Target Organization *</label>
-                {/* <input 
-                  type="text" 
-                  placeholder="Filter organizations..." 
-                  value={orgQuery}
-                  onChange={e => setOrgQuery(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 text-[10px] text-slate-300 placeholder-slate-650 outline-none focus:border-emerald-500/50 w-36 transition-colors"
-                /> */}
               </div>
               <select
                 required
@@ -547,13 +563,6 @@ function Home({
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">Department *</label>
-                {/* <input 
-                  type="text" 
-                  placeholder="Filter departments..." 
-                  value={deptQuery}
-                  onChange={e => setDeptQuery(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 text-[10px] text-slate-300 placeholder-slate-650 outline-none focus:border-emerald-500/50 w-36 transition-colors"
-                /> */}
               </div>
               <select
                 required
@@ -573,13 +582,6 @@ function Home({
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">Target Clinician (Optional - defaults to Admin)</label>
-              {/* <input 
-                type="text" 
-                placeholder="Filter clinicians..." 
-                value={staffQuery}
-                onChange={e => setStaffQuery(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 text-[10px] text-slate-300 placeholder-slate-650 outline-none focus:border-emerald-500/50 w-44 transition-colors"
-              /> */}
             </div>
             <select
               value={bookingForm.staff_to}
@@ -645,14 +647,12 @@ function Home({
           <button
             type="submit"
             disabled={bookingLoading}
-            className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-110 active:scale-[0.98] text-slate-950 font-extrabold text-sm tracking-wide rounded-xl shadow-lg shadow-emerald-500/10 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 hover:brightness-110 active:scale-[0.98] text-slate-950 font-extrabold text-sm rounded-xl shadow-lg shadow-emerald-500/10 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
-            {bookingLoading && <Loader2 className="h-5 w-5 animate-spin" />}
             Request Appointment Slot
           </button>
         </form>
       </section>
-
     </div>
   );
 }
