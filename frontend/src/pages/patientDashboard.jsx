@@ -25,14 +25,17 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
 
   useEffect(() => {
-    let orgName = '';
+    let active = true;
+    let socketInstance;
+
     const initSocket = async () => {
       try {
         const orgRes = await api.get('/auth/my-organization');
-        orgName = orgRes.data.organization;
+        if (!active) return;
+        const orgName = orgRes.data.organization;
         if (!orgName) return;
 
-        const socketInstance = io('http://localhost:5000');
+        socketInstance = io('http://localhost:5000');
         
         socketInstance.on('connect', () => {
           socketInstance.emit('register-user', {
@@ -44,6 +47,12 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
         });
 
         socketInstance.on('new-notification', (data) => {
+          const notificationData = {
+            ...data,
+            unread: true
+          };
+          setNotifications(prev => [notificationData, ...prev]);
+
           const newToast = {
             id: Date.now() + Math.random(),
             type: data.type === 'referral_created' ? 'referral' : 'appointment',
@@ -51,7 +60,6 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
             message: data.message
           };
           setToasts(prev => [...prev, newToast]);
-          setNotifications(prev => [data, ...prev]);
 
           setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== newToast.id));
@@ -61,6 +69,15 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
         socketInstance.on('new-message', (msg) => {
           const isFromSelf = msg.sender_id.toString() === user.id.toString() && msg.sender_role === user.role;
           if (!isFromSelf) {
+            const notificationData = {
+              type: 'message',
+              title: `New Message from ${msg.sender_name}`,
+              message: msg.message_text,
+              timestamp: new Date().toISOString(),
+              unread: true
+            };
+            setNotifications(prev => [notificationData, ...prev]);
+
             const newToast = {
               id: Date.now() + Math.random(),
               type: 'message',
@@ -75,16 +92,19 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
         });
 
         setSocket(socketInstance);
-
-        return () => {
-          socketInstance.disconnect();
-        };
       } catch (err) {
         console.error('Failed to initialize socket:', err);
       }
     };
 
     initSocket();
+
+    return () => {
+      active = false;
+      if (socketInstance) {
+        socketInstance.disconnect();
+      }
+    };
   }, [user]);
 
   // Appointments State
@@ -370,9 +390,9 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
                 className="h-9 w-9 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-200 transition-colors relative"
               >
                 <Bell className="h-4.5 w-4.5" />
-                {notifications.length > 0 && (
+                {notifications.filter(n => n.unread).length > 0 && (
                   <span className="absolute -top-1 -right-1 bg-teal-500 text-slate-950 rounded-full text-[9px] font-extrabold h-4 w-4 flex items-center justify-center animate-pulse">
-                    {notifications.length}
+                    {notifications.filter(n => n.unread).length}
                   </span>
                 )}
               </button>
@@ -393,14 +413,27 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
                       <p className="text-[11px] text-slate-500 text-center py-4 italic">No new notifications</p>
                     ) : (
                       notifications.map((n, idx) => (
-                        <div key={idx} className="p-2 bg-slate-950/40 rounded-xl border border-slate-800">
+                        <div 
+                          key={idx} 
+                          onClick={() => {
+                            setNotifications(prev => prev.map((item, i) => i === idx ? { ...item, unread: false } : item));
+                          }}
+                          className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                            n.unread 
+                              ? 'bg-slate-900 border-slate-700/80 hover:bg-slate-850' 
+                              : 'bg-slate-950/20 border-slate-900/50 opacity-60 hover:bg-slate-900/20'
+                          }`}
+                        >
                           <div className="flex justify-between items-start">
-                            <span className="text-xs font-bold text-slate-300">{n.title}</span>
+                            <div className="flex items-center gap-1.5">
+                              {n.unread && <span className="h-1.5 w-1.5 rounded-full bg-teal-500 animate-pulse shrink-0" />}
+                              <span className="text-xs font-bold text-slate-300">{n.title}</span>
+                            </div>
                             <span className="text-[9px] text-slate-500 font-mono">
                               {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
-                          <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">{n.message}</p>
+                          <p className="text-[10px] text-slate-400 mt-1 leading-relaxed pl-3">{n.message}</p>
                         </div>
                       ))
                     )}
