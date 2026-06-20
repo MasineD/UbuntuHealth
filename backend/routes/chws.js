@@ -119,4 +119,116 @@ router.get('/chw/patients', protect, async (req, res) => {
     }
 });
 
+// Get home visits assigned to the logged-in CHW
+router.get('/chw/home-visits', protect, async (req, res) => {
+    if (req.user.role !== 'chw') {
+        return res.status(403).json({ message: 'Only community health workers can view assigned visits' });
+    }
+    try {
+        const result = await pool.query(
+            `SELECT ca.id, ca.date::text, ca.visit_scheduled, ca.visit_status, ca.visit_reason, ca.visit_date::text, ca.patient_id,
+                    p.fullname AS patient_name, p.id_number AS patient_id_number,
+                    p.gender AS patient_gender, p.email AS patient_email,
+                    p.phone_number AS patient_phone, p.house_number, p.surbub, p.city,
+                    p.next_of_kin_fullname, p.next_of_kin_phone
+             FROM patients.compliance_alerts ca
+             JOIN users.patients p ON ca.patient_id = p.id
+             WHERE ca.chw_id = $1 AND ca.visit_scheduled = true
+             ORDER BY ca.id DESC`,
+            [req.user.id]
+        );
+        
+        const visits = result.rows.map(row => ({
+            id: row.id,
+            patient_id: row.patient_id,
+            patient_name: row.patient_name,
+            patient_id_number: row.patient_id_number,
+            patient_gender: row.patient_gender,
+            patient_phone: row.patient_phone,
+            patient_email: row.patient_email,
+            patient_address: `${row.house_number || ''} ${row.surbub || ''}, ${row.city || ''}`.trim(),
+            patient_next_of_kin: row.next_of_kin_fullname,
+            patient_next_of_kin_phone: row.next_of_kin_phone,
+            reason: row.visit_reason,
+            visit_date: row.visit_date,
+            status: row.visit_status
+        }));
+        return res.json({ homeVisits: visits });
+    } catch (error) {
+        console.error('Error fetching CHW home visits:', error.message);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Fulfill a home visit
+router.post('/chw/home-visits/:id/fulfill', protect, async (req, res) => {
+    if (req.user.role !== 'chw') {
+        return res.status(403).json({ message: 'Only community health workers can fulfill visits' });
+    }
+    const visitId = req.params.id;
+    const { visitNotes } = req.body;
+    try {
+        const result = await pool.query(
+            `UPDATE patients.compliance_alerts 
+             SET visit_status = 'visitted', visit_notes = $1 
+             WHERE id = $2 AND chw_id = $3 RETURNING *`,
+            [visitNotes || '', visitId, req.user.id]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Assigned home visit not found' });
+        }
+        
+        const alert = result.rows[0];
+
+        // Fetch patient and CHW details
+        const patientRes = await pool.query(
+            `SELECT fullname FROM users.patients WHERE id = $1`,
+            [alert.patient_id]
+        );
+        const patientName = patientRes.rows[0]?.fullname || 'Patient';
+
+        const chwRes = await pool.query(
+            `SELECT fullname FROM users.comm_health_workers WHERE id = $1`,
+            [req.user.id]
+        );
+        const chwName = chwRes.rows[0]?.fullname || 'Community Health Worker';
+
+        // Retrieve org of registering admin
+        const orgRes = await pool.query(
+            `SELECT a.organization 
+             FROM users.comm_health_workers u 
+             JOIN users.admins a ON u.registra_id = a.id 
+             WHERE u.id = $1`,
+            [req.user.id]
+        );
+        const org = orgRes.rows[0]?.organization;
+
+        const io = req.app.get('socketio');
+        if (io && org) {
+            const adminNotification = {
+                type: 'home_visit_fulfilled',
+                title: 'Home Visit Fulfilled',
+                message: `Community Health Worker "${chwName}" has fulfilled the home visit for patient "${patientName}". Visit Notes: ${visitNotes}`,
+                timestamp: new Date().toISOString(),
+                visit: {
+                    id: alert.id,
+                    patient_id: alert.patient_id,
+                    patient_name: patientName,
+                    chw_id: req.user.id,
+                    chw_name: chwName,
+                    visit_status: 'visitted',
+                    visit_notes: visitNotes,
+                    visit_date: alert.visit_date
+                }
+            };
+            io.to(`org_${org}_role_admin`).emit('new-notification', adminNotification);
+        }
+
+        return res.json({ message: 'Home visit marked as fulfilled successfully', visit: alert });
+    } catch (error) {
+        console.error('Error fulfilling home visit:', error.message);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
 export default router;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { LayoutDashboard, Users, Calendar, ArrowLeftRight, MessageSquare, LogOut, Loader2,ShieldCheck,Search,Bell,Plus,Send,User as UserIcon,CheckCircle,FileText,Clock,Menu,ChevronRight,X, Activity, AlertTriangle
 } from 'lucide-react';
@@ -13,10 +13,71 @@ const api = axios.create({
   }
 });
 
-function Dashboard({ user, onLogout, actionLoading }) {
+function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'patients' | 'appointments' | 'referrals' | 'chat'
   const [searchQuery, setSearchQuery] = useState('');
   const [staffSearchQuery, setStaffSearchQuery] = useState('');
+
+  // Profile Modal State
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileData, setProfileData] = useState(null);
+  const [profileForm, setProfileForm] = useState({ fullname: '', phone_number: '', email: '' });
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState('');
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  const fetchProfile = async () => {
+    setProfileLoading(true);
+    setProfileError('');
+    try {
+      const res = await api.get('/auth/profile');
+      if (res.data && res.data.profile) {
+        setProfileData(res.data.profile);
+        setProfileForm({
+          fullname: res.data.profile.fullname || '',
+          phone_number: res.data.profile.phone_number || '',
+          email: res.data.profile.email || ''
+        });
+      }
+    } catch (err) {
+      setProfileError(err.response?.data?.message || 'Failed to load profile details');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isProfileModalOpen) {
+      fetchProfile();
+      setIsEditingProfile(false);
+      setProfileSuccess('');
+      setProfileError('');
+    }
+  }, [isProfileModalOpen]);
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setProfileSaving(true);
+    setProfileError('');
+    setProfileSuccess('');
+    try {
+      const res = await api.put('/auth/profile', profileForm);
+      if (res.data && res.data.profile) {
+        setProfileData(res.data.profile);
+        setProfileSuccess('Profile updated successfully!');
+        setIsEditingProfile(false);
+        if (onUserUpdate && res.data.user) {
+          onUserUpdate(res.data.user);
+        }
+      }
+    } catch (err) {
+      setProfileError(err.response?.data?.message || 'Failed to save profile changes');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
   
   // Socket & Notifications state
   const [socket, setSocket] = useState(null);
@@ -57,7 +118,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
             id: Date.now() + Math.random(),
             type: data.type === 'compliance_alert' 
               ? 'compliance_alert' 
-              : (data.type === 'referral_created' ? 'referral' : 'appointment'),
+              : (data.type === 'home_visit_fulfilled' ? 'compliance_alert' : (data.type === 'referral_created' ? 'referral' : 'appointment')),
             title: data.title,
             message: data.message
           };
@@ -67,7 +128,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
             setToasts(prev => prev.filter(t => t.id !== newToast.id));
           }, 5000);
 
-          if (data.type === 'compliance_alert') {
+          if (data.type === 'compliance_alert' || data.type === 'home_visit_fulfilled') {
             fetchComplianceAlerts();
           }
         });
@@ -143,6 +204,13 @@ function Dashboard({ user, onLogout, actionLoading }) {
   // State to hold retrieved patients
   const [patients, setPatients] = useState([]);
   const [complianceAlerts, setComplianceAlerts] = useState([]);
+  const [hiddenAlertIds, setHiddenAlertIds] = useState([]);
+  const activeTimeoutsRef = useRef({});
+  const [isScheduleVisitModalOpen, setIsScheduleVisitModalOpen] = useState(false);
+  const [selectedAlertForVisit, setSelectedAlertForVisit] = useState(null);
+  const [selectedChwId, setSelectedChwId] = useState('');
+  const [visitReason, setVisitReason] = useState('Medication Non-Compliance Follow-up');
+  const [visitDate, setVisitDate] = useState('');
   const [loadingPatients, setLoadingPatients] = useState(false);
 
   // Appointments administrative state
@@ -166,7 +234,12 @@ function Dashboard({ user, onLogout, actionLoading }) {
 
   const handleUpdateAppointmentStatus = async (appId, status) => {
     try {
-      await api.put(`/auth/appointments/${appId}/status`, { status });
+      let key = undefined;
+      if (status === 'attended') {
+        key = prompt('Please enter the Appointment Verification Key:');
+        if (key === null) return; // cancelled
+      }
+      await api.put(`/auth/appointments/${appId}/status`, { status, key });
       fetchAppointments();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to update appointment status');
@@ -209,18 +282,70 @@ function Dashboard({ user, onLogout, actionLoading }) {
     }
   };
 
-  const handleScheduleHomeVisit = async (alertId) => {
+  const handleScheduleHomeVisit = (alert) => {
+    setSelectedAlertForVisit(alert);
+    setSelectedChwId('');
+    if (alert.alert_type === 'routine') {
+      setVisitReason(`Routine Task Non-Compliance Follow-up: ${alert.routine_description || ''}`);
+    } else {
+      setVisitReason('Medication Non-Compliance Follow-up');
+    }
+    setVisitDate(new Date().toISOString().split('T')[0]);
+    setIsScheduleVisitModalOpen(true);
+  };
+
+  const submitScheduleHomeVisit = async () => {
+    if (!selectedAlertForVisit || !selectedChwId || !visitDate) return;
     try {
-      const response = await api.post(`/auth/admin/compliance-alerts/${alertId}/schedule-visit`);
+      const response = await api.post(`/auth/admin/compliance-alerts/${selectedAlertForVisit.id}/schedule-visit`, {
+        chwId: selectedChwId,
+        reason: visitReason,
+        date: visitDate
+      });
       if (response.data) {
         setComplianceAlerts(prev => prev.map(a => 
-          a.id === alertId ? { ...a, visit_scheduled: true } : a
+          a.id === selectedAlertForVisit.id ? { ...a, visit_scheduled: true, visit_date: visitDate, visit_reason: visitReason } : a
         ));
+        setIsScheduleVisitModalOpen(false);
+        setSelectedAlertForVisit(null);
       }
     } catch (err) {
       console.error('Error scheduling home visit:', err);
     }
   };
+
+  // Handle card disappearance 30 seconds after status changes to 'visitted'
+  useEffect(() => {
+    complianceAlerts.forEach(alert => {
+      if (alert.visit_status === 'visitted' && !hiddenAlertIds.includes(alert.id)) {
+        if (!activeTimeoutsRef.current[alert.id]) {
+          const timeoutId = setTimeout(() => {
+            setHiddenAlertIds(prev => [...prev, alert.id]);
+            delete activeTimeoutsRef.current[alert.id];
+          }, 30000); // 30 seconds
+          activeTimeoutsRef.current[alert.id] = timeoutId;
+        }
+      }
+    });
+
+    // Cleanup timeouts for any alerts that are no longer in complianceAlerts
+    const alertIds = complianceAlerts.map(a => a.id);
+    Object.keys(activeTimeoutsRef.current).forEach(id => {
+      if (!alertIds.includes(Number(id))) {
+        clearTimeout(activeTimeoutsRef.current[id]);
+        delete activeTimeoutsRef.current[id];
+      }
+    });
+  }, [complianceAlerts, hiddenAlertIds]);
+
+  // Clean up all timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (activeTimeoutsRef.current) {
+        Object.values(activeTimeoutsRef.current).forEach(clearTimeout);
+      }
+    };
+  }, []);
 
   // CHWs state
   const [chws, setChws] = useState([]);
@@ -333,101 +458,10 @@ function Dashboard({ user, onLogout, actionLoading }) {
     release_date: ''
   });
   const [routinesList, setRoutinesList] = useState([]);
-  const [loadingHealthRecord, setLoadingHealthRecord] = useState(false);
-  const [savingHealthRecord, setSavingHealthRecord] = useState(false);
-  const [isHealthRecordModalOpen, setIsHealthRecordModalOpen] = useState(false);
-  const [healthRecordError, setHealthRecordError] = useState('');
-  const [healthRecordSuccess, setHealthRecordSuccess] = useState('');
-
-  const openHealthRecord = async (patient) => {
+  const [isPatientDetailsModalOpen, setIsPatientDetailsModalOpen] = useState(false);
+  const openPatientDetails = (patient) => {
     setSelectedPatient(patient);
-    setLoadingHealthRecord(true);
-    setHealthRecordError('');
-    setHealthRecordSuccess('');
-    
-    const dbPatientId = patient.id.replace('PT-', '');
-    
-    try {
-      const response = await api.get(`/auth/patients/${dbPatientId}/health-record`);
-      if (response.data) {
-        const hr = response.data.healthRecord || {};
-        setHealthRecord({
-          blood_type: hr.blood_type || '',
-          blood_pressure: hr.blood_pressure || '',
-          weight: hr.weight || '',
-          height: hr.height || '',
-          sugar_level: hr.sugar_level || '',
-          diagnosis: hr.diagnosis || '',
-          on_treatment: hr.on_treatment === true,
-          morning_time: hr.morning_time || '',
-          midday_time: hr.midday_time || '',
-          evening_time: hr.evening_time || '',
-          admission_date: hr.admission_date ? hr.admission_date.split('T')[0] : '',
-          release_date: hr.release_date ? hr.release_date.split('T')[0] : ''
-        });
-        setRoutinesList(response.data.routines || []);
-        setIsHealthRecordModalOpen(true);
-      }
-    } catch (err) {
-      console.error('Error fetching health record:', err);
-      alert('Failed to retrieve patient health records. Please try again.');
-    } finally {
-      setLoadingHealthRecord(false);
-    }
-  };
-
-  const handleSaveHealthRecord = async (e) => {
-    e.preventDefault();
-    setSavingHealthRecord(true);
-    setHealthRecordError('');
-    setHealthRecordSuccess('');
-    
-    const dbPatientId = selectedPatient.id.replace('PT-', '');
-    
-    try {
-      await api.put(`/auth/patients/${dbPatientId}/health-record`, {
-        ...healthRecord,
-        routines: routinesList
-      });
-      setHealthRecordSuccess('Health record and routines saved successfully!');
-      setTimeout(() => {
-        setIsHealthRecordModalOpen(false);
-        setHealthRecordSuccess('');
-      }, 1500);
-    } catch (err) {
-      console.error('Error saving health record:', err);
-      setHealthRecordError(err.response?.data?.message || 'Failed to save health record');
-    } finally {
-      setSavingHealthRecord(false);
-    }
-  };
-
-  const handleAddRoutine = () => {
-    setRoutinesList([
-      ...routinesList,
-      {
-        weekly: false,
-        monthly: false,
-        weekday: 'Monday',
-        day_of_month: 1,
-        time: '08:00',
-        description: 'Doctor visit/ checkup',
-        status: false
-      }
-    ]);
-  };
-
-  const handleRemoveRoutine = (index) => {
-    setRoutinesList(routinesList.filter((_, i) => i !== index));
-  };
-
-  const handleRoutineChange = (index, field, value) => {
-    setRoutinesList(routinesList.map((r, i) => {
-      if (i === index) {
-        return { ...r, [field]: value };
-      }
-      return r;
-    }));
+    setIsPatientDetailsModalOpen(true);
   };
 
   // Clinical Staff state
@@ -652,7 +686,9 @@ function Dashboard({ user, onLogout, actionLoading }) {
 
   const handleUpdateReferralStatus = async (refId) => {
     try {
-      await api.put(`/auth/referrals/${refId}/status`);
+      const key = prompt('Please enter the Referral Verification Key:');
+      if (key === null) return; // cancelled
+      await api.put(`/auth/referrals/${refId}/status`, { key });
       fetchReferrals();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to update referral status');
@@ -827,6 +863,12 @@ function Dashboard({ user, onLogout, actionLoading }) {
                 <span className="inline-block bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
                   {user.organization} Admin
                 </span>
+                <button
+                  onClick={() => setIsProfileModalOpen(true)}
+                  className="mt-1.5 text-xs text-emerald-400 hover:text-emerald-300 font-semibold underline block text-left transition-colors duration-200"
+                >
+                  View Profile
+                </button>
               </div>
             </div>
           </div>
@@ -881,7 +923,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
         <div className="absolute top-[-15%] right-[-15%] w-[600px] h-[600px] bg-emerald-950/10 rounded-full blur-[140px] pointer-events-none" />
         
         {/* Top Header Bar */}
-        <header className="h-20 border-b border-slate-800/80 px-8 flex items-center justify-between shrink-0 bg-slate-900/40 backdrop-blur-md relative z-10">
+        <header className="h-20 border-b border-slate-800/80 px-8 flex items-center justify-between shrink-0 bg-slate-900/40 backdrop-blur-md relative z-20">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold text-white tracking-wide capitalize">
               {activeTab === 'chat' ? 'Medical Chat Room' : activeTab}
@@ -1008,106 +1050,62 @@ function Dashboard({ user, onLogout, actionLoading }) {
                 })}
               </div>
 
-              {/* Grid: Upcoming Appointments & Referrals overview */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-                
-                {/* Left Block: Upcoming Appointments list */}
-                <div className="md:col-span-7 bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-                    <div className="space-y-0.5">
-                      <h3 className="font-bold text-slate-200">Appointments Schedule</h3>
-                      <p className="text-slate-500 text-xs">Today’s appointments at General Hospital</p>
-                    </div>
-                    <button 
-                      onClick={() => setActiveTab('appointments')}
-                      className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1"
-                    >
-                      View All <ChevronRight className="h-3 w-3" />
-                    </button>
-                  </div>
-
-                  <div className="divide-y divide-slate-800/80">
-                    {appointmentsList.slice(0, 3).map((app) => (
-                      <div key={app.id} className="py-3.5 flex items-center justify-between first:pt-0 last:pb-0">
-                        <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-300">
-                            {app.patient.split(' ').map(n=>n[0]).join('')}
-                          </div>
-                          <div>
-                            <p className="font-semibold text-slate-200 text-sm">{app.patient}</p>
-                            <p className="text-xs text-slate-400">{app.type}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-slate-200 font-semibold">{app.time}</p>
-                          <span className="inline-block bg-sky-500/10 text-sky-400 rounded-full px-2 py-0.5 text-[9px] font-bold mt-1">
-                            {app.status}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Right Block: System Referral alerts */}
-                <div className="md:col-span-5 bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-                    <div className="space-y-0.5">
-                      <h3 className="font-bold text-slate-200">Pending Referrals</h3>
-                      <p className="text-slate-500 text-xs">Incoming cases requiring authorization</p>
-                    </div>
-                    <button 
-                      onClick={() => setActiveTab('referrals')}
-                      className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1"
-                    >
-                      View All <ChevronRight className="h-3 w-3" />
-                    </button>
-                  </div>
-
-                  <div className="space-y-3.5">
-                    {referralsList.slice(0, 2).map((ref) => (
-                      <div key={ref.id} className="p-3 bg-slate-950/40 border border-slate-800 rounded-xl flex flex-col justify-between gap-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-slate-200 text-xs">{ref.patient}</span>
-                          <span className="text-[10px] font-mono text-slate-500">{ref.id}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-[11px] text-slate-400 border-t border-slate-800/60 pt-2">
-                          <span>{ref.department}</span>
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                            ref.status === 'Pending Review' ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'
-                          }`}>
-                            {ref.status}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-              </div>
-
               {/* Patient Compliance Section */}
               <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
                 <div className="pb-4 border-b border-slate-800">
                   <h3 className="font-bold text-slate-200">Patient Compliance</h3>
                   <p className="text-slate-500 text-xs">Patients who have missed their scheduled medication today</p>
                 </div>
-                {complianceAlerts.length === 0 ? (
+                {complianceAlerts.filter(alert => !hiddenAlertIds.includes(alert.id)).length === 0 ? (
                   <p className="text-xs text-slate-500 italic py-2">All patients are compliant today.</p>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {complianceAlerts.map((alert) => (
-                      <div key={alert.id} className="bg-slate-950/40 border border-slate-800 p-4 rounded-xl flex flex-col justify-between gap-4">
+                    {complianceAlerts.filter(alert => !hiddenAlertIds.includes(alert.id)).map((alert) => (
+                      <div key={alert.id} className="group relative bg-slate-950/40 border border-slate-800 p-4 rounded-xl flex flex-col justify-between gap-4 overflow-hidden">
+                        
+                        {/* Hover summary notes */}
+                        {alert.visit_status === 'visitted' && alert.visit_notes && (
+                          <div className="absolute inset-0 bg-slate-950/95 p-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center z-10 pointer-events-none">
+                            <span className="text-xs text-emerald-400 font-semibold mb-1 uppercase tracking-wider font-mono">Visit Notes</span>
+                            <p className="text-xs text-slate-300 leading-relaxed max-w-xs">{alert.visit_notes}</p>
+                          </div>
+                        )}
+
                         <div className="space-y-2">
                           <div className="flex justify-between items-start">
                             <div>
                               <h4 className="font-bold text-slate-200 text-sm">{alert.patient_name}</h4>
                               <p className="text-xs text-slate-500">ID: {alert.patient_id_number || 'N/A'}</p>
                             </div>
-                            <span className="bg-red-500/10 border border-red-500/20 text-red-400 font-mono text-[10px] px-2 py-0.5 rounded font-bold uppercase">
-                              Did not take medication
-                            </span>
+                            {alert.visit_status === 'visitted' ? (
+                              <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono text-[10px] px-2 py-0.5 rounded font-bold uppercase">
+                                Visited
+                              </span>
+                            ) : alert.alert_type === 'routine' ? (
+                              <span className="bg-amber-500/10 border border-amber-500/20 text-amber-400 font-mono text-[10px] px-2 py-0.5 rounded font-bold uppercase">
+                                Missed Routine
+                              </span>
+                            ) : (
+                              <span className="bg-red-500/10 border border-red-500/20 text-red-400 font-mono text-[10px] px-2 py-0.5 rounded font-bold uppercase">
+                                Did not take medication
+                              </span>
+                            )}
                           </div>
+
+                          {alert.alert_type === 'routine' && (
+                            <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-3 text-xs space-y-1.5 my-2">
+                              <div className="text-slate-350">
+                                <strong>Routine Task:</strong> <span className="text-slate-200 font-medium">{alert.routine_description}</span>
+                              </div>
+                              <div className="text-slate-350">
+                                <strong>Scheduled Time:</strong> <span className="text-slate-200 font-mono">{alert.routine_time ? alert.routine_time.substring(0, 5) : 'N/A'}</span>
+                              </div>
+                              <div className="text-rose-400 font-medium">
+                                <strong>Alert:</strong> Patient missed their routine checkup/refill.
+                              </div>
+                            </div>
+                          )}
+
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-slate-400 border-t border-slate-800/40 pt-2.5">
                             <div><strong>Phone:</strong> {alert.patient_phone || 'N/A'}</div>
                             <div><strong>Gender:</strong> {alert.patient_gender || 'N/A'}</div>
@@ -1116,13 +1114,20 @@ function Dashboard({ user, onLogout, actionLoading }) {
                           </div>
                         </div>
                         <div className="flex justify-end pt-2 border-t border-slate-800/40">
-                          {alert.visit_scheduled ? (
+                          {alert.visit_status === 'visitted' ? (
                             <span className="text-xs text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
-                              Home Visit Scheduled
+                              Visited
                             </span>
+                          ) : alert.visit_scheduled ? (
+                            <button
+                              disabled
+                              className="py-1.5 px-3 bg-slate-800 text-slate-500 text-xs font-bold rounded-lg cursor-not-allowed"
+                            >
+                              Scheduled
+                            </button>
                           ) : (
                             <button
-                              onClick={() => handleScheduleHomeVisit(alert.id)}
+                              onClick={() => handleScheduleHomeVisit(alert)}
                               className="py-1.5 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg transition-colors cursor-pointer"
                             >
                               Schedule Home Visit
@@ -1182,7 +1187,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
                       </tr>
                     ) : (
                       patients.map((pt) => (
-                        <tr key={pt.id} onClick={() => openHealthRecord(pt)} className="hover:bg-slate-800/20 transition-colors cursor-pointer">
+                        <tr key={pt.id} onClick={() => openPatientDetails(pt)} className="hover:bg-slate-800/20 transition-colors cursor-pointer">
                           <td className="py-3.5 px-4 font-bold text-slate-200">
                             {pt.name}
                             <span className="block text-[10px] text-slate-500 font-mono mt-0.5">{pt.id}</span>
@@ -2378,14 +2383,14 @@ function Dashboard({ user, onLogout, actionLoading }) {
         </div>
       )}
 
-      {/* ================= PATIENT HEALTH RECORD MODAL ================= */}
-      {isHealthRecordModalOpen && selectedPatient && (
+      {/* ================= PATIENT HEALTH RECORD MODAL ================= */}      {/* ================= PATIENT DETAILS MODAL ================= */}
+      {isPatientDetailsModalOpen && selectedPatient && (
         <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
             
             {/* Close Button */}
             <button 
-              onClick={() => { setIsHealthRecordModalOpen(false); setHealthRecordError(''); setHealthRecordSuccess(''); }}
+              onClick={() => { setIsPatientDetailsModalOpen(false); setSelectedPatient(null); }}
               className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
             >
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2395,326 +2400,244 @@ function Dashboard({ user, onLogout, actionLoading }) {
 
             <div className="border-b border-slate-800 pb-4">
               <div className="flex justify-between items-baseline">
-                <h2 className="text-xl font-bold text-white">Health Record: {selectedPatient.name}</h2>
+                <h2 className="text-xl font-bold text-white">Patient Profile: {selectedPatient.name}</h2>
                 <span className="text-xs text-slate-500 font-mono">Patient ID: {selectedPatient.id}</span>
               </div>
-              <p className="text-slate-400 text-xs mt-1">Review clinical readings, configure active treatments, and update scheduled care routines.</p>
+              <p className="text-slate-400 text-xs mt-1">Personal and registration details stored in the patients database.</p>
             </div>
 
-            {/* Error & Success Notification */}
-            {healthRecordError && (
-              <div className="bg-red-950/40 border border-red-500/25 text-red-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
-                <span>{healthRecordError}</span>
-              </div>
-            )}
-            {healthRecordSuccess && (
-              <div className="bg-emerald-950/40 border border-emerald-500/25 text-emerald-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
-                <span>{healthRecordSuccess}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveHealthRecord} className="space-y-6">
+            <div className="space-y-6">
               
-              {/* Grid 1: Clinical Diagnostics */}
+              {/* Personal Details */}
               <div className="space-y-4">
-                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Clinical Measurements</h3>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-400 font-semibold">Blood Type</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. O+"
-                      value={healthRecord.blood_type}
-                      onChange={(e) => setHealthRecord({...healthRecord, blood_type: e.target.value})}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors"
-                    />
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Personal Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-950/30 p-4 border border-slate-800/80 rounded-2xl">
+                  <div>
+                    <span className="text-[10px] text-slate-550 block font-semibold uppercase">Full Name</span>
+                    <span className="text-sm text-slate-200 font-medium">{selectedPatient.fullname}</span>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-400 font-semibold">Blood Pressure</label>
-                    <input
-                      type="number"
-                      step="any"
-                      placeholder="mmHg"
-                      value={healthRecord.blood_pressure}
-                      onChange={(e) => setHealthRecord({...healthRecord, blood_pressure: e.target.value})}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
-                    />
+                  <div>
+                    <span className="text-[10px] text-slate-550 block font-semibold uppercase">Identity Number</span>
+                    <span className="text-sm text-slate-200 font-mono">{selectedPatient.id_number}</span>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-400 font-semibold">Sugar Level</label>
-                    <input
-                      type="number"
-                      step="any"
-                      placeholder="mmol/L"
-                      value={healthRecord.sugar_level}
-                      onChange={(e) => setHealthRecord({...healthRecord, sugar_level: e.target.value})}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
-                    />
+                  <div>
+                    <span className="text-[10px] text-slate-550 block font-semibold uppercase">Gender</span>
+                    <span className="text-sm text-slate-200 font-medium">{selectedPatient.gender}</span>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-400 font-semibold">Weight (kg)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      placeholder="kg"
-                      value={healthRecord.weight}
-                      onChange={(e) => setHealthRecord({...healthRecord, weight: e.target.value})}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-400 font-semibold">Height (cm)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      placeholder="cm"
-                      value={healthRecord.height}
-                      onChange={(e) => setHealthRecord({...healthRecord, height: e.target.value})}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-1 md:col-span-2">
-                    <label className="text-xs text-slate-400 font-semibold">Diagnosis</label>
-                    <input
-                      type="text"
-                      placeholder="Describe findings / conditions"
-                      value={healthRecord.diagnosis}
-                      onChange={(e) => setHealthRecord({...healthRecord, diagnosis: e.target.value})}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="text-xs text-slate-400 font-semibold">Admission Date</label>
-                      <input
-                        type="date"
-                        value={healthRecord.admission_date}
-                        onChange={(e) => setHealthRecord({...healthRecord, admission_date: e.target.value})}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs text-slate-400 font-semibold">Release Date</label>
-                      <input
-                        type="date"
-                        value={healthRecord.release_date}
-                        onChange={(e) => setHealthRecord({...healthRecord, release_date: e.target.value})}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
-                      />
-                    </div>
+                  <div>
+                    <span className="text-[10px] text-slate-550 block font-semibold uppercase">Age</span>
+                    <span className="text-sm text-slate-200 font-medium">{selectedPatient.age}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Treatment config */}
-              <div className="space-y-4 pt-2 border-t border-slate-800">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="on_treatment"
-                    checked={healthRecord.on_treatment}
-                    onChange={(e) => setHealthRecord({...healthRecord, on_treatment: e.target.checked})}
-                    className="h-4.5 w-4.5 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 focus:ring-opacity-20 focus:ring-2 bg-slate-950"
-                  />
-                  <label htmlFor="on_treatment" className="text-sm font-semibold text-slate-200 cursor-pointer">
-                    On Treatment
-                  </label>
-                </div>
-
-                {healthRecord.on_treatment && (
-                  <div className="bg-slate-950/40 border border-slate-800/80 rounded-2xl p-4 space-y-3 animate-fadeIn">
-                    <span className="text-xs font-semibold text-slate-400 block">Configure medication taking schedule (times of the day):</span>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[11px] text-slate-500 font-semibold uppercase">Morning Time</label>
-                        <input
-                          type="time"
-                          value={healthRecord.morning_time}
-                          onChange={(e) => setHealthRecord({...healthRecord, morning_time: e.target.value})}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] text-slate-500 font-semibold uppercase">Midday Time</label>
-                        <input
-                          type="time"
-                          value={healthRecord.midday_time}
-                          onChange={(e) => setHealthRecord({...healthRecord, midday_time: e.target.value})}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] text-slate-500 font-semibold uppercase">Evening Time</label>
-                        <input
-                          type="time"
-                          value={healthRecord.evening_time}
-                          onChange={(e) => setHealthRecord({...healthRecord, evening_time: e.target.value})}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
-                        />
-                      </div>
-                    </div>
+              {/* Contact Details */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Contact & Address</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-950/30 p-4 border border-slate-800/80 rounded-2xl">
+                  <div>
+                    <span className="text-[10px] text-slate-550 block font-semibold uppercase">Email Address</span>
+                    <span className="text-sm text-slate-200 truncate block">{selectedPatient.email || 'N/A'}</span>
                   </div>
-                )}
+                  <div>
+                    <span className="text-[10px] text-slate-550 block font-semibold uppercase">Phone Number</span>
+                    <span className="text-sm text-slate-200 font-mono">{selectedPatient.phone_number}</span>
+                  </div>
+                  <div className="md:col-span-2">
+                    <span className="text-[10px] text-slate-550 block font-semibold uppercase">Residential Address</span>
+                    <span className="text-sm text-slate-200">
+                      {[
+                        selectedPatient.house_number,
+                        selectedPatient.surbub,
+                        selectedPatient.municipality,
+                        selectedPatient.city
+                      ].filter(Boolean).join(', ') || 'N/A'}
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              {/* Care Routines manager */}
-              <div className="space-y-4 pt-4 border-t border-slate-800">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Scheduled Care Routines</h3>
-                  <button
+              {/* Next of Kin Details */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Next of Kin Contact</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-950/30 p-4 border border-slate-800/80 rounded-2xl">
+                  <div>
+                    <span className="text-[10px] text-slate-550 block font-semibold uppercase">Next of Kin Full Name</span>
+                    <span className="text-sm text-slate-200 font-medium">{selectedPatient.next_of_kin_fullname || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-550 block font-semibold uppercase">Next of Kin Phone</span>
+                    <span className="text-sm text-slate-200 font-mono">{selectedPatient.next_of_kin_phone || 'N/A'}</span>
+                  </div>
+                  <div className="md:col-span-2">
+                    <span className="text-[10px] text-slate-550 block font-semibold uppercase">Next of Kin Email</span>
+                    <span className="text-sm text-slate-200 block truncate">{selectedPatient.next_of_kin_email || 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <div className="pt-4 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => { setIsPatientDetailsModalOpen(false); setSelectedPatient(null); }}
+                className="w-full py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
+              >
+                Close Profile
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= PROFILE MODAL ================= */}
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => setIsProfileModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <h2 className="text-xl font-bold text-white">Admin Profile</h2>
+              <p className="text-slate-400 text-xs mt-1">Manage and view your user profile details.</p>
+            </div>
+
+            {profileLoading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 text-emerald-500 animate-spin mb-2" />
+                <p className="text-xs text-slate-400">Loading profile details...</p>
+              </div>
+            ) : profileError ? (
+              <div className="p-4 bg-red-950/30 border border-red-500/20 rounded-2xl flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-sm font-bold text-red-200">Error</h4>
+                  <p className="text-xs text-red-400 mt-1">{profileError}</p>
+                  <button 
                     type="button"
-                    onClick={handleAddRoutine}
-                    className="py-1.5 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-bold rounded-lg flex items-center gap-1 transition-colors"
+                    onClick={fetchProfile}
+                    className="mt-2 text-xs font-semibold text-emerald-400 hover:underline"
                   >
-                    <Plus className="h-3.5 w-3.5" /> Add Care Routine
+                    Retry
                   </button>
                 </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveProfile} className="space-y-6">
+                {profileSuccess && (
+                  <div className="p-4 bg-emerald-950/30 border border-emerald-500/20 rounded-2xl flex items-center gap-3">
+                    <CheckCircle className="h-5 w-5 text-emerald-400 shrink-0" />
+                    <p className="text-xs text-emerald-300 font-semibold">{profileSuccess}</p>
+                  </div>
+                )}
 
-                <div className="space-y-3.5 max-h-[300px] overflow-y-auto pr-1">
-                  {routinesList.length === 0 ? (
-                    <p className="text-xs text-slate-500 text-center py-6 border border-dashed border-slate-800 rounded-2xl bg-slate-950/20">
-                      No routines scheduled. Add one to track appointments, checks, or refills.
-                    </p>
-                  ) : (
-                    routinesList.map((routine, idx) => (
-                      <div key={idx} className="bg-slate-950/30 border border-slate-800/80 rounded-2xl p-4 flex flex-col gap-3 relative">
-                        
-                        {/* Remove button */}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveRoutine(idx)}
-                          className="absolute top-4 right-4 text-slate-500 hover:text-red-400 transition-colors"
-                          title="Remove routine"
-                        >
-                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Full Name</label>
+                    <input
+                      type="text"
+                      required
+                      disabled={!isEditingProfile}
+                      value={profileForm.fullname}
+                      onChange={(e) => setProfileForm({ ...profileForm, fullname: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-medium transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                    />
+                  </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                          
-                          {/* Routine Description Selector */}
-                          <div className="md:col-span-4 space-y-1">
-                            <label className="text-[10px] text-slate-500 font-semibold uppercase">Routine Type *</label>
-                            <select
-                              value={routine.description}
-                              onChange={(e) => handleRoutineChange(idx, 'description', e.target.value)}
-                              className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
-                            >
-                              <option value="Doctor visit/ checkup">Doctor visit/ checkup</option>
-                              <option value="medicine refill">medicine refill</option>
-                            </select>
-                          </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Phone Number</label>
+                    <input
+                      type="text"
+                      required
+                      disabled={!isEditingProfile}
+                      value={profileForm.phone_number}
+                      onChange={(e) => setProfileForm({ ...profileForm, phone_number: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-mono transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                    />
+                  </div>
 
-                          {/* Time */}
-                          <div className="md:col-span-2 space-y-1">
-                            <label className="text-[10px] text-slate-500 font-semibold uppercase">Time *</label>
-                            <input
-                              type="time"
-                              required
-                              value={routine.time}
-                              onChange={(e) => handleRoutineChange(idx, 'time', e.target.value)}
-                              className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
-                            />
-                          </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      required
+                      disabled={!isEditingProfile}
+                      value={profileForm.email}
+                      onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                    />
+                  </div>
 
-                          {/* Frequency selectors */}
-                          <div className="md:col-span-4 flex gap-4 items-center h-full pt-4">
-                            <label className="flex items-center gap-1.5 text-xs text-slate-350 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={routine.weekly}
-                                onChange={(e) => handleRoutineChange(idx, 'weekly', e.target.checked)}
-                                className="h-4 w-4 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-900"
-                              />
-                              Weekly
-                            </label>
-                            <label className="flex items-center gap-1.5 text-xs text-slate-350 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={routine.monthly}
-                                onChange={(e) => handleRoutineChange(idx, 'monthly', e.target.checked)}
-                                className="h-4 w-4 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-900"
-                              />
-                              Monthly
-                            </label>
-                          </div>
-
-                          {/* Status checklist */}
-                          <div className="md:col-span-2 flex items-center pt-4">
-                            <label className="flex items-center gap-1.5 text-xs text-slate-350 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={routine.status}
-                                onChange={(e) => handleRoutineChange(idx, 'status', e.target.checked)}
-                                className="h-4 w-4 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-900"
-                              />
-                              Attended
-                            </label>
-                          </div>
-                        </div>
-
-                        {/* Conditional inputs for weekly / monthly frequency details */}
-                        <div className="grid grid-cols-2 gap-4 border-t border-slate-900 pt-2 text-xs">
-                          {routine.weekly && (
-                            <div className="space-y-1">
-                              <label className="text-[10px] text-slate-500 font-semibold uppercase">Weekday</label>
-                              <select
-                                value={routine.weekday || 'Monday'}
-                                onChange={(e) => handleRoutineChange(idx, 'weekday', e.target.value)}
-                                className="bg-slate-900 border border-slate-850 rounded-xl py-1.5 px-3 w-full text-slate-200 outline-none"
-                              >
-                                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => (
-                                  <option key={d} value={d}>{d}</option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
-                          {routine.monthly && (
-                            <div className="space-y-1">
-                              <label className="text-[10px] text-slate-500 font-semibold uppercase">Day of Month</label>
-                              <input
-                                type="number"
-                                min={1}
-                                max={31}
-                                value={routine.day_of_month || 1}
-                                onChange={(e) => handleRoutineChange(idx, 'day_of_month', parseInt(e.target.value, 10))}
-                                className="bg-slate-900 border border-slate-850 rounded-xl py-1.5 px-3 w-full text-slate-200 outline-none font-mono"
-                              />
-                            </div>
-                          )}
-                        </div>
-
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-800/80">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block font-semibold uppercase mb-1">Identity Number (Uneditable)</span>
+                      <div className="bg-slate-950/60 border border-slate-800/50 rounded-xl px-4 py-2.5 text-sm text-slate-400 font-mono select-none">
+                        {profileData?.identity || '—'}
                       </div>
-                    ))
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block font-semibold uppercase mb-1">Organization (Uneditable)</span>
+                      <div className="bg-slate-950/60 border border-slate-800/50 rounded-xl px-4 py-2.5 text-sm text-slate-400 font-medium select-none">
+                        {profileData?.organization || '—'}
+                      </div>
+                    </div>
+                    <div className="md:col-span-2">
+                      <span className="text-[10px] text-slate-550 block font-semibold uppercase mb-1">Facility Code (Uneditable)</span>
+                      <div className="bg-slate-950/60 border border-slate-800/50 rounded-xl px-4 py-2.5 text-sm text-slate-400 font-mono select-none">
+                        {profileData?.facility_code || '—'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+                  {isEditingProfile ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditingProfile(false);
+                          setProfileForm({
+                            fullname: profileData?.fullname || '',
+                            phone_number: profileData?.phone_number || '',
+                            email: profileData?.email || ''
+                          });
+                          setProfileError('');
+                          setProfileSuccess('');
+                        }}
+                        className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition-all duration-300"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={profileSaving}
+                        className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-sm transition-all duration-300 flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20"
+                      >
+                        {profileSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Save Changes
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingProfile(true)}
+                      className="px-6 py-2.5 bg-slate-850 border border-slate-700/60 hover:bg-slate-800 text-emerald-400 font-bold rounded-xl text-sm transition-all duration-300"
+                    >
+                      Edit Profile
+                    </button>
                   )}
                 </div>
-              </div>
-
-              {/* Action buttons */}
-              <div className="flex gap-4 pt-4 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => { setIsHealthRecordModalOpen(false); setHealthRecordError(''); setHealthRecordSuccess(''); }}
-                  className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingHealthRecord}
-                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
-                >
-                  {savingHealthRecord && <Loader2 className="h-5 w-5 animate-spin" />}
-                  {savingHealthRecord ? 'Saving Record...' : 'Save Health Record'}
-                </button>
-              </div>
-
-            </form>
-
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -2911,6 +2834,92 @@ function Dashboard({ user, onLogout, actionLoading }) {
               </div>
 
             </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= SCHEDULE HOME VISIT MODAL ================= */}
+      {isScheduleVisitModalOpen && selectedAlertForVisit && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => { setIsScheduleVisitModalOpen(false); setSelectedAlertForVisit(null); }}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <h2 className="text-xl font-bold text-white">Schedule Home Visit</h2>
+              <p className="text-slate-400 text-xs mt-1">Assign a community health worker to visit {selectedAlertForVisit.patient_name}.</p>
+            </div>
+
+            <div className="space-y-4">
+              {/* CHW Selection */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold">Community Health Worker *</label>
+                <select
+                  value={selectedChwId}
+                  onChange={(e) => setSelectedChwId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                >
+                  <option value="">Select Community Health Worker</option>
+                  {chws.map((chw) => (
+                    <option key={chw.id} value={chw.id}>
+                      {chw.fullname} (ID: {chw.employee_id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Visit Date */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold">Visit Date *</label>
+                <input
+                  type="date"
+                  value={visitDate}
+                  onChange={(e) => setVisitDate(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                />
+              </div>
+
+              {/* Visit Reason */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold">Reason for Visit</label>
+                <textarea
+                  rows={3}
+                  value={visitReason}
+                  onChange={(e) => setVisitReason(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors resize-none"
+                  placeholder="Reason for visit..."
+                />
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-4 pt-4 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => { setIsScheduleVisitModalOpen(false); setSelectedAlertForVisit(null); }}
+                className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              {selectedChwId && (
+                <button
+                  type="button"
+                  onClick={submitScheduleHomeVisit}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all"
+                >
+                  Schedule
+                </button>
+              )}
+            </div>
 
           </div>
         </div>

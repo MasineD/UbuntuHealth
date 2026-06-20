@@ -158,6 +158,10 @@ function App() {
     );
   }
 
+  const handleUserUpdate = (updatedUser) => {
+    setUser(prev => ({ ...prev, ...updatedUser }));
+  };
+
   if (authMode === 'dashboard' && user) {
     if (user.role === 'patient') {
       return (
@@ -165,6 +169,7 @@ function App() {
           user={user} 
           onLogout={handleLogout} 
           actionLoading={actionLoading} 
+          onUserUpdate={handleUserUpdate}
         />
       );
     }
@@ -174,6 +179,7 @@ function App() {
           user={user} 
           onLogout={handleLogout} 
           actionLoading={actionLoading} 
+          onUserUpdate={handleUserUpdate}
         />
       );
     }
@@ -183,6 +189,7 @@ function App() {
           user={user} 
           onLogout={handleLogout} 
           actionLoading={actionLoading} 
+          onUserUpdate={handleUserUpdate}
         />
       );
     }
@@ -191,6 +198,7 @@ function App() {
         user={user} 
         onLogout={handleLogout} 
         actionLoading={actionLoading} 
+        onUserUpdate={handleUserUpdate}
       />
     );
   }
