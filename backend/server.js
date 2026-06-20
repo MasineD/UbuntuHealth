@@ -93,6 +93,91 @@ io.on('connection', (socket) => {
 });
 // ========== END OF SOCKET.IO CODE ==========
 
+// ========== BACKGROUND COMPLIANCE HELPER ==========
+async function autoScheduleHomeVisit(alertId, patientId, orgName, reason) {
+  try {
+    // 1. Find a CHW in the same organization
+    const chwRes = await pool.query(
+      `SELECT chw.id, chw.fullname, chw.phone_number 
+       FROM users.comm_health_workers chw
+       JOIN users.admins a ON chw.registra_id = a.id
+       WHERE a.organization = $1
+       ORDER BY chw.id ASC
+       LIMIT 1`,
+      [orgName]
+    );
+
+    if (chwRes.rows.length === 0) {
+      console.log(`No CHW found in organization "${orgName}" to auto-schedule home visit.`);
+      return;
+    }
+
+    const chw = chwRes.rows[0];
+    const chwId = chw.id;
+
+    // 2. Set visit date to the next day of the current day
+    const nextDay = new Date();
+    nextDay.setDate(nextDay.getDate() + 1);
+    const visitDateStr = nextDay.toISOString().split('T')[0];
+
+    // 3. Update the compliance alert in the database
+    await pool.query(
+      `UPDATE patients.compliance_alerts 
+       SET visit_scheduled = true, 
+           chw_id = $1, 
+           visit_reason = $2, 
+           visit_date = $3, 
+           visit_status = 'pending' 
+       WHERE id = $4`,
+      [chwId, reason, visitDateStr, alertId]
+    );
+
+    console.log(`Auto-scheduled home visit for alert ${alertId} to CHW ${chw.fullname} on ${visitDateStr}. Reason: ${reason}`);
+
+    // 4. Send notifications
+    // Query patient details to send in notifications
+    const patientRes = await pool.query(
+      `SELECT p.id, p.fullname, p.id_number, p.phone_number, p.gender, p.house_number, p.surbub, p.city 
+       FROM users.patients p WHERE p.id = $1`,
+      [patientId]
+    );
+    const patient = patientRes.rows[0] || {};
+
+    // Notify CHW
+    const chwNotification = {
+      type: 'home_visit',
+      title: 'New Home Visit Assigned',
+      message: `You have been automatically assigned a home visit for patient "${patient.fullname}" on ${visitDateStr}. Reason: ${reason}`,
+      timestamp: new Date().toISOString(),
+      visit: {
+        id: alertId,
+        reason: reason,
+        visit_date: visitDateStr,
+        patient: {
+          id: patient.id,
+          fullname: patient.fullname,
+          id_number: patient.id_number,
+          phone_number: patient.phone_number,
+          gender: patient.gender,
+          address: `${patient.house_number || ''} ${patient.surbub || ''}, ${patient.city || ''}`.trim()
+        }
+      }
+    };
+    io.to(`org_${orgName}_user_chw_${chwId}`).emit('new-notification', chwNotification);
+
+    // Notify Patient
+    const patientNotification = {
+      type: 'home_visit_scheduled',
+      title: 'Home Visit Scheduled',
+      message: `A home visit has been scheduled for you on ${visitDateStr}. Reason: ${reason}`,
+      timestamp: new Date().toISOString()
+    };
+    io.to(`org_${orgName}_user_patient_${patient.id}`).emit('new-notification', patientNotification);
+  } catch (err) {
+    console.error('Error in autoScheduleHomeVisit:', err.message);
+  }
+}
+
 // ========== BACKGROUND MEDICATION CHECKER ==========
 const startMedicationChecker = () => {
   setInterval(async () => {
@@ -207,6 +292,9 @@ const startMedicationChecker = () => {
 
               if (insertAlert.rows.length > 0) {
                 console.log(`Compliance failure detected for patient ${row.fullname}. Alerting admin.`);
+                const alertId = insertAlert.rows[0].id;
+                await autoScheduleHomeVisit(alertId, patientId, org, 'Medication Non-Compliance Follow-up');
+
                 const alertPayload = {
                   type: 'compliance_alert',
                   title: 'Patient Non-Compliance',
@@ -339,6 +427,9 @@ const startRoutineChecker = () => {
 
               if (insertAlert.rows.length > 0) {
                 console.log(`Compliance failure detected for routine ${routine.id} (patient: ${routine.patient_name}). Alerting admin.`);
+                const alertId = insertAlert.rows[0].id;
+                await autoScheduleHomeVisit(alertId, routine.patient_id, routine.organization, `Routine Task Non-Compliance Follow-up: ${routine.description}`);
+
                 const alertPayload = {
                   type: 'compliance_alert',
                   title: 'Patient Routine Non-Compliance',
