@@ -940,7 +940,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
         <div className="absolute top-[-15%] right-[-15%] w-[600px] h-[600px] bg-emerald-950/10 rounded-full blur-[140px] pointer-events-none" />
         
         {/* Top Header Bar */}
-        <header className="h-20 border-b border-slate-800/80 px-8 flex items-center justify-between shrink-0 bg-slate-900/40 backdrop-blur-md relative z-10">
+        <header className="h-20 border-b border-slate-800/80 px-8 flex items-center justify-between shrink-0 bg-slate-900/40 backdrop-blur-md relative z-20">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold text-white tracking-wide capitalize">
               {activeTab === 'chat' ? 'Medical Chat Room' : activeTab}
@@ -1065,84 +1065,6 @@ function Dashboard({ user, onLogout, actionLoading }) {
                     </div>
                   );
                 })}
-              </div>
-
-              {/* Grid: Upcoming Appointments & Referrals overview */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-                
-                {/* Left Block: Upcoming Appointments list */}
-                <div className="md:col-span-7 bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-                    <div className="space-y-0.5">
-                      <h3 className="font-bold text-slate-200">Appointments Schedule</h3>
-                      <p className="text-slate-500 text-xs">Today’s appointments at General Hospital</p>
-                    </div>
-                    <button 
-                      onClick={() => setActiveTab('appointments')}
-                      className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1"
-                    >
-                      View All <ChevronRight className="h-3 w-3" />
-                    </button>
-                  </div>
-
-                  <div className="divide-y divide-slate-800/80">
-                    {appointmentsList.slice(0, 3).map((app) => (
-                      <div key={app.id} className="py-3.5 flex items-center justify-between first:pt-0 last:pb-0">
-                        <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-300">
-                            {app.patient.split(' ').map(n=>n[0]).join('')}
-                          </div>
-                          <div>
-                            <p className="font-semibold text-slate-200 text-sm">{app.patient}</p>
-                            <p className="text-xs text-slate-400">{app.type}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-slate-200 font-semibold">{app.time}</p>
-                          <span className="inline-block bg-sky-500/10 text-sky-400 rounded-full px-2 py-0.5 text-[9px] font-bold mt-1">
-                            {app.status}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Right Block: System Referral alerts */}
-                <div className="md:col-span-5 bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-                    <div className="space-y-0.5">
-                      <h3 className="font-bold text-slate-200">Pending Referrals</h3>
-                      <p className="text-slate-500 text-xs">Incoming cases requiring authorization</p>
-                    </div>
-                    <button 
-                      onClick={() => setActiveTab('referrals')}
-                      className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1"
-                    >
-                      View All <ChevronRight className="h-3 w-3" />
-                    </button>
-                  </div>
-
-                  <div className="space-y-3.5">
-                    {referralsList.slice(0, 2).map((ref) => (
-                      <div key={ref.id} className="p-3 bg-slate-950/40 border border-slate-800 rounded-xl flex flex-col justify-between gap-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-slate-200 text-xs">{ref.patient}</span>
-                          <span className="text-[10px] font-mono text-slate-500">{ref.id}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-[11px] text-slate-400 border-t border-slate-800/60 pt-2">
-                          <span>{ref.department}</span>
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                            ref.status === 'Pending Review' ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'
-                          }`}>
-                            {ref.status}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
               </div>
 
               {/* Patient Compliance Section */}

@@ -293,11 +293,11 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
 
   const sidebarItems = [
     { id: 'overview', name: 'Overview', icon: LayoutDashboard },
-    { id: 'records', name: 'Medical Records', icon: FileText },
+    // { id: 'records', name: 'Medical Records', icon: FileText },
     { id: 'routines', name: 'Daily Routines', icon: Clock },
     { id: 'appointments', name: 'Appointments', icon: Calendar },
     { id: 'referrals', name: 'My Referrals', icon: ChevronRight },
-    { id: 'contacts', name: 'Contacts', icon: Phone },
+    // { id: 'contacts', name: 'Contacts', icon: Phone },
     { id: 'chat', name: 'Chat Room', icon: MessageSquare }
   ];
 
@@ -391,7 +391,7 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
         <div className="absolute top-[-15%] right-[-15%] w-[600px] h-[600px] bg-teal-950/10 rounded-full blur-[140px] pointer-events-none" />
         
         {/* Top Header Bar */}
-        <header className="h-20 border-b border-slate-800/80 px-8 flex items-center justify-between shrink-0 bg-slate-900/40 backdrop-blur-md relative z-10">
+        <header className="h-20 border-b border-slate-800/80 px-8 flex items-center justify-between shrink-0 bg-slate-900/40 backdrop-blur-md relative z-20">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold text-white tracking-wide capitalize">
               {activeTab === 'records' 
@@ -429,7 +429,7 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
               </button>
               
               {showNotificationsDropdown && (
-                <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-850 rounded-2xl p-4 shadow-2xl z-50 text-left animate-slideIn">
+                <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-850 rounded-2xl p-4 shadow-2xl text-left animate-slideIn">
                   <div className="flex justify-between items-center pb-2.5 border-b border-slate-800">
                     <span className="text-xs font-bold text-slate-200">Alerts & Notifications</span>
                     <button 
@@ -520,7 +520,7 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
               <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                 
                 {/* Left: Routines check list */}
-                <div className="md:col-span-7 bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div className="md:col-span-15 bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
                     <h3 className="font-bold text-slate-200">Routines for Today</h3>
                     <button 
@@ -557,7 +557,7 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
                 </div>
 
                 {/* Right: Last medical reports summary */}
-                <div className="md:col-span-5 bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+                {/* <div className="md:col-span-5 bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
                     <h3 className="font-bold text-slate-200">Latest Diagnosis</h3>
                     <button 
@@ -581,7 +581,7 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
                       </div>
                     </div>
                   ))}
-                </div>
+                </div> */}
 
               </div>
 
@@ -650,7 +650,7 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
                   </div>
                 ))}
 
-                {routines.map((r) => (
+                {/* {routines.map((r) => (
                   <div key={r.id} className="py-4 flex items-center justify-between first:pt-0 last:pb-0">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -670,7 +670,7 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
                       {r.status}
                     </button>
                   </div>
-                ))}
+                ))} */}
               </div>
             </div>
           )}

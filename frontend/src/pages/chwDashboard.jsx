@@ -13,7 +13,7 @@ const api = axios.create({
 });
 
 function ChwDashboard({ user, onLogout, actionLoading }) {
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'patients' | 'visits' | 'referrals'
+  const [activeTab, setActiveTab] = useState('visits'); // 'overview' | 'patients' | 'visits' | 'referrals'
   const [patients, setPatients] = useState([]);
   const [loadingPatients, setLoadingPatients] = useState(false);
 
@@ -332,8 +332,6 @@ function ChwDashboard({ user, onLogout, actionLoading }) {
   }, []);
 
   const sidebarItems = [
-    { id: 'overview', name: 'Overview', icon: LayoutDashboard },
-    { id: 'patients', name: 'Assigned Patients', icon: Users },
     { id: 'visits', name: 'Daily Visits', icon: ClipboardList },
     { id: 'referrals', name: 'Referrals', icon: Calendar },
     { id: 'chat', name: 'Chat Room', icon: MessageSquare }
@@ -439,7 +437,7 @@ function ChwDashboard({ user, onLogout, actionLoading }) {
         <div className="absolute top-[-15%] right-[-15%] w-[600px] h-[600px] bg-teal-950/10 rounded-full blur-[140px] pointer-events-none" />
         
         {/* Top Header Bar */}
-        <header className="h-20 border-b border-slate-800/80 px-8 flex items-center justify-between shrink-0 bg-slate-900/40 backdrop-blur-md relative z-10">
+        <header className="h-20 border-b border-slate-800/80 px-8 flex items-center justify-between shrink-0 bg-slate-900/40 backdrop-blur-md relative z-20">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold text-white tracking-wide capitalize">
               {activeTab === 'patients' ? 'Assigned Facility Patients' : activeTab === 'visits' ? 'Daily Care Visits' : activeTab}
@@ -516,200 +514,10 @@ function ChwDashboard({ user, onLogout, actionLoading }) {
         {/* Dynamic Inner CHW Pages */}
         <section className="flex-grow p-8 overflow-y-auto relative z-10 max-w-5xl w-full mx-auto">
           
-          {/* ================= PAGE: OVERVIEW ================= */}
-          {activeTab === 'overview' && (
-            <div className="space-y-6">
-              
-              {/* CHW Welcome Banner */}
-              <div className="bg-gradient-to-r from-teal-950/30 to-slate-900/30 border border-teal-500/20 rounded-3xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div className="space-y-1">
-                  <h2 className="text-xl font-bold text-slate-100">Hello, {user.name.split(' ')[0]}</h2>
-                  <p className="text-slate-400 text-xs">Track clinical routines and complete community visits for patients.</p>
-                </div>
-                <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 px-3 py-1.5 rounded-full text-xs font-semibold">
-                  <CheckCircle className="h-4 w-4" /> Shift Active
-                </div>
-              </div>
-
-              {/* Health stats block */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {[
-                  { title: 'Total Patients', value: patients.length.toString(), desc: 'Under your facility care', icon: Users, color: 'text-rose-400 bg-rose-500/10 border-rose-500/25' },
-                  { title: 'Visits Completed', value: `${visits.filter(v => v.status === 'Completed').length} / ${visits.length}`, desc: 'Shift progress', icon: Clock, color: 'text-teal-400 bg-teal-500/10 border-teal-500/25' },
-                  { title: 'Active Facility Code', value: 'REG-ZA', desc: 'Secure identifier', icon: Calendar, color: 'text-sky-400 bg-sky-500/10 border-sky-500/25' }
-                ].map((stat, i) => {
-                  const Icon = stat.icon;
-                  return (
-                    <div key={i} className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
-                      <div className="space-y-1.5">
-                        <span className="text-slate-500 text-xs font-semibold tracking-wide uppercase">{stat.title}</span>
-                        <h3 className="text-lg font-bold text-white">{stat.value}</h3>
-                        <p className="text-[11px] text-slate-400">{stat.desc}</p>
-                      </div>
-                      <div className={`h-11 w-11 rounded-xl border flex items-center justify-center ${stat.color}`}>
-                        <Icon className="h-5 w-5" />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Grid: Overview summaries */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-                
-                {/* Left: Visits check list */}
-                <div className="md:col-span-12 bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-                    <h3 className="font-bold text-slate-200">Today’s Patient Visits</h3>
-                    <button 
-                      onClick={() => setActiveTab('visits')}
-                      className="text-xs text-teal-400 hover:text-teal-300 font-semibold"
-                    >
-                      View Checklist
-                    </button>
-                  </div>
-
-                  <div className="divide-y divide-slate-800/80">
-                    {visits.slice(0, 3).map((v) => (
-                      <div key={v.id} className="py-4 flex items-center justify-between first:pt-0 last:pb-0">
-                        <div className="flex items-start gap-3">
-                          <button
-                            onClick={() => toggleVisitStatus(v.id)}
-                            className={`mt-0.5 h-5 w-5 rounded-md border flex items-center justify-center transition-all ${
-                              v.status === 'Completed'
-                                ? 'bg-teal-500 border-teal-500 text-slate-950 font-bold'
-                                : 'border-slate-700 hover:border-teal-500/50 bg-slate-950'
-                            }`}
-                          >
-                            {v.status === 'Completed' && <CheckCircle className="h-3.5 w-3.5" />}
-                          </button>
-                          <div>
-                            <p className={`font-semibold text-sm ${v.status === 'Completed' ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
-                              {v.patient}
-                            </p>
-                            <p className="text-xs text-slate-400 mt-0.5">{v.task}</p>
-                          </div>
-                        </div>
-                        <span className="text-xs text-slate-500 font-mono">{v.time}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-              </div>
-
-            </div>
-          )}
-
-          {/* ================= PAGE: ASSIGNED PATIENTS ================= */}
-          {activeTab === 'patients' && (
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
-              <div className="pb-4 border-b border-slate-800">
-                <h3 className="font-bold text-slate-200">Facility Patient Index</h3>
-                <p className="text-slate-500 text-xs">Patients associated with your organization registrar</p>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-800 text-slate-400 text-xs">
-                      <th className="py-3 px-4">Patient Name</th>
-                      <th className="py-3 px-4">Gender & Age</th>
-                      <th className="py-3 px-4">Contact Info</th>
-                      <th className="py-3 px-4">Address Details</th>
-                      <th className="py-3 px-4">National ID</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/80">
-                    {loadingPatients ? (
-                      <tr>
-                        <td colSpan="5" className="py-8 text-center text-slate-550">
-                          <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-teal-400" />
-                          Loading patients index...
-                        </td>
-                      </tr>
-                    ) : patients.length === 0 ? (
-                      <tr>
-                        <td colSpan="5" className="py-8 text-center text-slate-550">
-                          No patients currently registered in your facility's jurisdiction.
-                        </td>
-                      </tr>
-                    ) : (
-                      patients.map((pt) => (
-                        <tr key={pt.id} className="hover:bg-slate-800/20 transition-colors">
-                          <td className="py-3.5 px-4 font-bold text-slate-200">
-                            {pt.fullname}
-                            <span className="block text-[10px] text-slate-500 font-mono mt-0.5">PT-{pt.id}</span>
-                          </td>
-                          <td className="py-3.5 px-4 text-slate-400">
-                            {pt.gender}, {calculateAgeFromId(pt.id_number)}
-                          </td>
-                          <td className="py-3.5 px-4 text-slate-350">
-                            <span className="block text-slate-200">{pt.phone_number}</span>
-                            <span className="block text-xs text-slate-500">{pt.email || 'No email provided'}</span>
-                          </td>
-                          <td className="py-3.5 px-4 text-slate-400 text-xs">
-                            <span className="block font-semibold text-slate-300">{pt.house_number} {pt.surbub}</span>
-                            <span className="block text-slate-500">{pt.municipality}, {pt.city}</span>
-                          </td>
-                          <td className="py-3.5 px-4 font-mono text-xs text-slate-500">{pt.id_number}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
           {/* ================= PAGE: DAILY VISITS ================= */}
           {activeTab === 'visits' && (
             <div className="space-y-6">
               
-              {/* Daily Care Visits */}
-              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
-                <div className="pb-4 border-b border-slate-800">
-                  <h3 className="font-bold text-slate-200">Visits Checklist</h3>
-                  <p className="text-slate-500 text-xs">Monitor medication and routine checks for assigned patient visits</p>
-                </div>
-
-                <div className="divide-y divide-slate-800/80">
-                  {visits.map((v) => (
-                    <div key={v.id} className="py-4.5 flex items-center justify-between">
-                      <div className="flex items-start gap-4">
-                        <button
-                          onClick={() => toggleVisitStatus(v.id)}
-                          className={`mt-0.5 h-6.5 w-6.5 rounded-lg border flex items-center justify-center transition-all ${
-                            v.status === 'Completed'
-                              ? 'bg-teal-500 border-teal-500 text-slate-950 font-extrabold'
-                              : 'border-slate-700 hover:border-teal-500/50 bg-slate-950'
-                          }`}
-                        >
-                          {v.status === 'Completed' && <CheckCircle className="h-4.5 w-4.5" />}
-                        </button>
-                        <div>
-                          <p className={`font-bold text-sm ${v.status === 'Completed' ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
-                            {v.patient}
-                          </p>
-                          <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
-                            <MapPin className="h-3 w-3 text-slate-500" />
-                            {v.task}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs font-semibold text-slate-500 font-mono block">{v.time}</span>
-                        <span className={`inline-block text-[9px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full mt-1.5 ${
-                          v.status === 'Completed' ? 'bg-teal-500/10 text-teal-400' : 'bg-amber-500/10 text-amber-400'
-                        }`}>
-                          {v.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
               {/* Scheduled Home Visits (assigned by Admin) */}
               <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
                 <div className="pb-4 border-b border-slate-800">
