@@ -3,7 +3,7 @@ import axios from 'axios';
 import { 
   LayoutDashboard, Users, Clock, LogOut, Loader2, ShieldCheck, Bell, 
   CheckCircle, User as UserIcon, Heart, Calendar, Activity, 
-  ClipboardList, MapPin, Search, Plus, Save, Trash2, X
+  ClipboardList, MapPin, Search, Plus, Save, Trash2, X, ArrowLeftRight
 } from 'lucide-react';
 
 const api = axios.create({
@@ -15,10 +15,37 @@ const api = axios.create({
 });
 
 function StaffDashboard({ user, onLogout, actionLoading }) {
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'consultations' | 'vitals' | 'referrals'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'appointments' | 'vitals' | 'referrals'
   const [patients, setPatients] = useState([]);
   const [loadingPatients, setLoadingPatients] = useState(false);
   const [vitalsSearchQuery, setVitalsSearchQuery] = useState('');
+
+  // Appointments State
+  const [appointments, setAppointments] = useState([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
+
+  const fetchAppointments = async () => {
+    setLoadingAppointments(true);
+    try {
+      const response = await api.get('/auth/appointments');
+      if (response.data && response.data.appointments) {
+        setAppointments(response.data.appointments);
+      }
+    } catch (err) {
+      console.error('Error fetching staff appointments:', err);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  };
+
+  const handleUpdateAppointmentStatus = async (appId, status) => {
+    try {
+      await api.put(`/auth/appointments/${appId}/status`, { status });
+      fetchAppointments();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update appointment status');
+    }
+  };
 
   // Referrals State
   const [referrals, setReferrals] = useState({ incoming: [], outgoing: [] });
@@ -174,28 +201,7 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
   const [healthRecordError, setHealthRecordError] = useState('');
   const [healthRecordSuccess, setHealthRecordSuccess] = useState('');
 
-  // Simulated consultations based on role
-  const [consultations, setConsultations] = useState([]);
 
-  useEffect(() => {
-    // Generate role-specific consultations
-    const defaultConsultations = [
-      { id: 1, patient: 'John Doe', type: user.staff_role === 'therapist' ? 'Physical Therapy Follow-up' : user.staff_role === 'social worker' ? 'Family Support Session' : 'Chronic Care Check-up', time: '09:00 AM', status: 'Scheduled' },
-      { id: 2, patient: 'Jane Smith', type: user.staff_role === 'therapist' ? 'Mental Health Assessment' : user.staff_role === 'social worker' ? 'Home Environment Assessment' : 'Prescription Renewal', time: '11:00 AM', status: 'Scheduled' },
-      { id: 3, patient: 'Zanele Ndlovu', type: user.staff_role === 'therapist' ? 'Occupational Therapy Session' : user.staff_role === 'social worker' ? 'Counseling Follow-up' : 'Prenatal Medical Check', time: '02:00 PM', status: 'Scheduled' },
-      { id: 4, patient: 'David Miller', type: user.staff_role === 'therapist' ? 'Mobility Assessment' : user.staff_role === 'social worker' ? 'Discharge Planning Support' : 'Renal Function Review', time: '04:30 PM', status: 'Scheduled' }
-    ];
-    setConsultations(defaultConsultations);
-  }, [user.staff_role]);
-
-  const toggleConsultationStatus = (id) => {
-    setConsultations(consultations.map(c => {
-      if (c.id === id) {
-        return { ...c, status: c.status === 'Attended' ? 'Scheduled' : 'Attended' };
-      }
-      return c;
-    }));
-  };
 
   const calculateAgeFromId = (idNumber) => {
     if (!idNumber || idNumber.length !== 13) return 30;
@@ -243,6 +249,7 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
     fetchReferrals();
     fetchOrganizations();
     fetchOrganizationPatients();
+    fetchAppointments();
   }, []);
 
   const openHealthRecord = async (patient) => {
@@ -363,9 +370,9 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
 
   const sidebarItems = [
     { id: 'overview', name: 'Overview', icon: LayoutDashboard },
-    { id: 'consultations', name: 'Consultations', icon: ClipboardList },
+    { id: 'appointments', name: 'Appointments', icon: Calendar },
     { id: 'vitals', name: 'Patient Vitals', icon: Heart },
-    { id: 'referrals', name: 'Referrals', icon: Calendar }
+    { id: 'referrals', name: 'Referrals', icon: ArrowLeftRight }
   ];
 
   const filteredPatients = orgPatientsList.filter(p => 
@@ -469,7 +476,7 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
         <header className="h-20 border-b border-slate-800/80 px-8 flex items-center justify-between shrink-0 bg-slate-900/40 backdrop-blur-md relative z-10">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold text-white tracking-wide capitalize">
-              {activeTab === 'vitals' ? 'Patient Vitals & Records' : activeTab === 'consultations' ? 'Consultations Checklist' : activeTab}
+              {activeTab === 'vitals' ? 'Patient Vitals & Records' : activeTab === 'appointments' ? 'My Appointments Schedule' : activeTab}
             </h1>
             <span className="text-xs text-slate-500 font-mono">| Clinical staff Portal</span>
           </div>
@@ -509,7 +516,7 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {[
                   { title: 'Registered Patients', value: patients.length.toString(), desc: 'In your organization', icon: Users, color: 'text-rose-400 bg-rose-500/10 border-rose-500/25' },
-                  { title: 'Consultations Today', value: `${consultations.filter(c => c.status === 'Attended').length} / ${consultations.length}`, desc: 'Progress check', icon: Clock, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25' },
+                  { title: 'Appointments Today', value: `${appointments.filter(a => a.status === 'attended').length} / ${appointments.length}`, desc: 'Progress check', icon: Clock, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25' },
                   { title: 'Role Specialty', value: user.staff_role, desc: 'Assigned credentials', icon: ShieldCheck, color: 'text-sky-400 bg-sky-500/10 border-sky-500/25' }
                 ].map((stat, i) => {
                   const Icon = stat.icon;
@@ -528,12 +535,12 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                 })}
               </div>
 
-              {/* Today's Consultations List */}
+              {/* Today's Appointments Checklist */}
               <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-                  <h3 className="font-bold text-slate-200">Today’s Consultations Checklist</h3>
+                  <h3 className="font-bold text-slate-200">Today’s Appointments Checklist</h3>
                   <button 
-                    onClick={() => setActiveTab('consultations')}
+                    onClick={() => setActiveTab('appointments')}
                     className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold"
                   >
                     View Full List
@@ -541,73 +548,151 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                 </div>
 
                 <div className="divide-y divide-slate-800/80">
-                  {consultations.map((c) => (
-                    <div key={c.id} className="py-4 flex items-center justify-between first:pt-0 last:pb-0">
-                      <div className="flex items-start gap-3">
-                        <button
-                          onClick={() => toggleConsultationStatus(c.id)}
-                          className={`mt-0.5 h-5 w-5 rounded-md border flex items-center justify-center transition-all ${
-                            c.status === 'Attended'
-                              ? 'bg-emerald-500 border-emerald-500 text-slate-950 font-bold'
-                              : 'border-slate-700 hover:border-emerald-500/50 bg-slate-950'
-                          }`}
-                        >
-                          {c.status === 'Attended' && <CheckCircle className="h-3.5 w-3.5" />}
-                        </button>
-                        <div>
-                          <p className={`font-semibold text-sm ${c.status === 'Attended' ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
-                            {c.patient}
-                          </p>
-                          <p className="text-xs text-slate-450 mt-0.5">{c.type}</p>
+                  {appointments.length === 0 ? (
+                    <p className="text-slate-500 text-xs py-4 text-center">No appointments scheduled for you today.</p>
+                  ) : (
+                    appointments.slice(0, 5).map((app) => (
+                      <div key={app.id} className="py-4 flex items-center justify-between first:pt-0 last:pb-0">
+                        <div className="flex items-start gap-3">
+                          <button
+                            onClick={() => handleUpdateAppointmentStatus(app.id, app.status === 'attended' ? 'approved' : 'attended')}
+                            disabled={app.status !== 'approved' && app.status !== 'attended'}
+                            className={`mt-0.5 h-5 w-5 rounded-md border flex items-center justify-center transition-all ${
+                              app.status === 'attended'
+                                ? 'bg-emerald-500 border-emerald-500 text-slate-950 font-bold cursor-pointer'
+                                : app.status === 'approved'
+                                  ? 'border-slate-700 hover:border-emerald-500/50 bg-slate-950 cursor-pointer'
+                                  : 'border-slate-800 bg-slate-950/40 opacity-50 cursor-not-allowed'
+                            }`}
+                          >
+                            {app.status === 'attended' && <CheckCircle className="h-3.5 w-3.5" />}
+                          </button>
+                          <div>
+                            <p className={`font-semibold text-sm ${app.status === 'attended' ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
+                              {app.fullname}
+                            </p>
+                            <p className="text-xs text-slate-550 mt-0.5">
+                              {app.department_to} · {app.reason}
+                            </p>
+                          </div>
                         </div>
+                        <span className="text-xs text-slate-500 font-mono">
+                          {app.arrival_date ? app.arrival_date.split('T')[0] : ''} {app.arrival_time || ''}
+                        </span>
                       </div>
-                      <span className="text-xs text-slate-500 font-mono">{c.time}</span>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
 
             </div>
           )}
 
-          {/* ================= PAGE: CONSULTATIONS ================= */}
-          {activeTab === 'consultations' && (
+          {/* ================= PAGE: APPOINTMENTS ================= */}
+          {activeTab === 'appointments' && (
             <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
               <div className="pb-4 border-b border-slate-800">
-                <h3 className="font-bold text-slate-200">Scheduled Clinical Consultations</h3>
-                <p className="text-slate-500 text-xs">Today's checklist for {user.staff_role}</p>
+                <h3 className="font-bold text-slate-200">Scheduled Clinical Appointments</h3>
+                <p className="text-slate-500 text-xs mt-1">Manage slots requested for your consultation.</p>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-sm">
                   <thead>
-                    <tr className="border-b border-slate-800 text-slate-400 text-xs">
+                    <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
                       <th className="py-3 px-4">Patient Name</th>
-                      <th className="py-3 px-4">Consultation Type</th>
-                      <th className="py-3 px-4">Scheduled Time</th>
-                      <th className="py-3 px-4">Action</th>
+                      <th className="py-3 px-4">Department</th>
+                      <th className="py-3 px-4">Scheduled Date</th>
+                      <th className="py-3 px-4">Reason</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80">
-                    {consultations.map((c) => (
-                      <tr key={c.id} className="hover:bg-slate-800/20 transition-colors">
-                        <td className="py-3.5 px-4 font-bold text-slate-200">{c.patient}</td>
-                        <td className="py-3.5 px-4 text-slate-300">{c.type}</td>
-                        <td className="py-3.5 px-4 font-mono text-xs text-slate-400">{c.time}</td>
-                        <td className="py-3.5 px-4">
-                          <button
-                            onClick={() => toggleConsultationStatus(c.id)}
-                            className={`py-1 px-3 rounded text-xs font-semibold tracking-wide transition-all ${
-                              c.status === 'Attended'
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
-                            }`}
-                          >
-                            {c.status === 'Attended' ? 'Attended' : 'Mark Attended'}
-                          </button>
+                    {loadingAppointments ? (
+                      <tr>
+                        <td colSpan="6" className="py-8 text-center text-slate-500">
+                          <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-400" />
+                          Loading appointments...
                         </td>
                       </tr>
-                    ))}
+                    ) : appointments.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="py-8 text-center text-slate-500 text-xs">
+                          No appointments scheduled for you.
+                        </td>
+                      </tr>
+                    ) : (
+                      appointments.map((app) => {
+                        let statusColor = 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
+                        if (app.status === 'approved') statusColor = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+                        if (app.status === 'rejected') statusColor = 'bg-red-500/10 text-red-400 border border-red-500/20';
+                        if (app.status === 'attended') statusColor = 'bg-sky-500/10 text-sky-400 border border-sky-500/20';
+
+                        return (
+                          <tr key={app.id} className="hover:bg-slate-800/20 transition-colors">
+                            <td className="py-3.5 px-4">
+                              <span className="block font-bold text-slate-200">{app.fullname}</span>
+                              <span className="block text-slate-500 text-xs mt-0.5">{app.phone_number || 'No contact phone'}</span>
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-350 text-xs">{app.department_to}</td>
+                            <td className="py-3.5 px-4 font-mono text-xs text-slate-300">
+                              {app.arrival_date ? app.arrival_date.split('T')[0] : 'N/A'}
+                              <span className="block text-slate-500 mt-0.5">at {app.arrival_time || 'anytime'}</span>
+                            </td>
+                            <td className="py-3.5 px-4 text-xs text-slate-400 max-w-xs truncate" title={app.reason}>
+                              {app.reason}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusColor}`}>
+                                {app.status}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              <div className="flex gap-2 justify-center items-center">
+                                {app.status === 'pending approval' && (
+                                  <>
+                                    <button
+                                      onClick={() => handleUpdateAppointmentStatus(app.id, 'approved')}
+                                      className="py-1 px-2.5 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-slate-950 border border-emerald-500/25 rounded text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                    >
+                                      Approve
+                                    </button>
+                                    <button
+                                      onClick={() => handleUpdateAppointmentStatus(app.id, 'rejected')}
+                                      className="py-1 px-2.5 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-slate-950 border border-red-500/25 rounded text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                    >
+                                      Reject
+                                    </button>
+                                  </>
+                                )}
+                                
+                                {app.status === 'approved' && (
+                                  <>
+                                    <button
+                                      onClick={() => handleUpdateAppointmentStatus(app.id, 'attended')}
+                                      className="py-1 px-2.5 bg-sky-500/10 hover:bg-sky-500 text-sky-400 hover:text-slate-950 border border-sky-500/25 rounded text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                    >
+                                      Attended
+                                    </button>
+                                    <button
+                                      onClick={() => handleUpdateAppointmentStatus(app.id, 'rejected')}
+                                      className="py-1 px-2.5 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-slate-950 border border-red-500/25 rounded text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                    >
+                                      Reject
+                                    </button>
+                                  </>
+                                )}
+
+                                {(app.status === 'attended' || app.status === 'rejected') && (
+                                  <span className="text-slate-500 text-[10px] italic">No actions available</span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
