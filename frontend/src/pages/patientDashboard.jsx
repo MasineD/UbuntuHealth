@@ -1,9 +1,38 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import axios from 'axios';
 import { LayoutDashboard, FileText, Clock, Phone, LogOut, Loader2,ShieldCheck,Bell,CheckCircle,User as UserIcon,Activity,Heart,ChevronRight, Calendar
 } from 'lucide-react';
 
+const api = axios.create({
+  baseURL: 'http://localhost:5000/api',
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
 function PatientDashboard({ user, onLogout, actionLoading }) {
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'records' | 'routines' | 'contacts'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'records' | 'routines' | 'contacts' | 'referrals'
+  const [referralsList, setReferralsList] = useState([]);
+  const [loadingReferrals, setLoadingReferrals] = useState(false);
+
+  const fetchReferrals = async () => {
+    setLoadingReferrals(true);
+    try {
+      const response = await api.get('/auth/referrals');
+      if (response.data && response.data.incoming) {
+        setReferralsList(response.data.incoming); // For patient, all their referrals are returned in incoming
+      }
+    } catch (err) {
+      console.error('Error fetching patient referrals:', err);
+    } finally {
+      setLoadingReferrals(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReferrals();
+  }, []);
   
   // Simulated Patient Routines
   const [routines, setRoutines] = useState([
@@ -33,6 +62,7 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
     { id: 'overview', name: 'Overview', icon: LayoutDashboard },
     { id: 'records', name: 'Medical Records', icon: FileText },
     { id: 'routines', name: 'Daily Routines', icon: Clock },
+    { id: 'referrals', name: 'My Referrals', icon: Calendar },
     { id: 'contacts', name: 'Contacts', icon: Phone }
   ];
 
@@ -357,6 +387,70 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
                 </div>
               </div>
 
+            </div>
+          )}
+
+          {/* ================= PAGE: MY REFERRALS ================= */}
+          {activeTab === 'referrals' && (
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+              <div className="pb-4 border-b border-slate-800">
+                <h3 className="font-bold text-slate-200">My Medical Referrals</h3>
+                <p className="text-slate-500 text-xs">Medical transfers and checkups scheduled for you across facilities</p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-slate-400 text-xs">
+                      <th className="py-3 px-4">Referral ID</th>
+                      <th className="py-3 px-4">Destination Facility</th>
+                      <th className="py-3 px-4">Department & Clinician</th>
+                      <th className="py-3 px-4">Estimated Arrival</th>
+                      <th className="py-3 px-4">Reason</th>
+                      <th className="py-3 px-4">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/80">
+                    {loadingReferrals ? (
+                      <tr>
+                        <td colSpan="6" className="py-8 text-center text-slate-500">
+                          <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-400" />
+                          Loading referrals...
+                        </td>
+                      </tr>
+                    ) : referralsList.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="py-8 text-center text-slate-500">
+                          No referrals registered for you.
+                        </td>
+                      </tr>
+                    ) : (
+                      referralsList.map((ref) => (
+                        <tr key={ref.id} className="hover:bg-slate-800/20 transition-colors">
+                          <td className="py-3.5 px-4 font-mono text-xs text-slate-400">#{ref.id}</td>
+                          <td className="py-3.5 px-4 text-slate-200 font-bold">{ref.organization_to}</td>
+                          <td className="py-3.5 px-4 text-xs">
+                            <span className="block text-slate-300">{ref.department_to}</span>
+                            <span className="block text-slate-500 mt-0.5">Recipient: {ref.staff_to || 'Organization Admin'}</span>
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-xs text-slate-350">
+                            {ref.arrival_date ? ref.arrival_date.split('T')[0] : 'N/A'}
+                            <span className="block text-slate-500 mt-0.5">{ref.arrival_time || ''}</span>
+                          </td>
+                          <td className="py-3.5 px-4 text-xs text-slate-400 max-w-xs truncate">{ref.reason}</td>
+                          <td className="py-3.5 px-4">
+                            <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                              ref.status ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
+                            }`}>
+                              {ref.status ? 'Attended' : 'Pending'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 

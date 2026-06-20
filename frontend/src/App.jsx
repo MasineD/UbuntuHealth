@@ -4,6 +4,8 @@ import { User, Lock, Mail, Phone, Building2, ShieldCheck, Activity, LogOut, Eye,
 } from 'lucide-react';
 import Dashboard from './pages/dashboard';
 import PatientDashboard from './pages/patientDashboard';
+import ChwDashboard from './pages/chwDashboard';
+import StaffDashboard from './pages/staffDashboard';
 
 // Configure axios with baseURL and credentials to support HTTP-only cookies
 const api = axios.create({
@@ -159,6 +161,24 @@ function App() {
     if (user.role === 'patient') {
       return (
         <PatientDashboard 
+          user={user} 
+          onLogout={handleLogout} 
+          actionLoading={actionLoading} 
+        />
+      );
+    }
+    if (user.role === 'chw') {
+      return (
+        <ChwDashboard 
+          user={user} 
+          onLogout={handleLogout} 
+          actionLoading={actionLoading} 
+        />
+      );
+    }
+    if (user.role === 'staff') {
+      return (
+        <StaffDashboard 
           user={user} 
           onLogout={handleLogout} 
           actionLoading={actionLoading} 

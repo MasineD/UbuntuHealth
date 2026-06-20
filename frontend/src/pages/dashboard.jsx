@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { LayoutDashboard, Users, Calendar, ArrowLeftRight, MessageSquare, LogOut, Loader2,ShieldCheck,Search,Bell,Plus,Send,User as UserIcon,CheckCircle,FileText,Clock,Menu,ChevronRight
+import { LayoutDashboard, Users, Calendar, ArrowLeftRight, MessageSquare, LogOut, Loader2,ShieldCheck,Search,Bell,Plus,Send,User as UserIcon,CheckCircle,FileText,Clock,Menu,ChevronRight,X
 } from 'lucide-react';
 
 const api = axios.create({
@@ -14,6 +14,7 @@ const api = axios.create({
 function Dashboard({ user, onLogout, actionLoading }) {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'patients' | 'appointments' | 'referrals' | 'chat'
   const [searchQuery, setSearchQuery] = useState('');
+  const [staffSearchQuery, setStaffSearchQuery] = useState('');
   
   // Chat Room state simulation
   const [chatMessages, setChatMessages] = useState([
@@ -94,8 +95,450 @@ function Dashboard({ user, onLogout, actionLoading }) {
     }
   };
 
+  // CHWs state
+  const [chws, setChws] = useState([]);
+  const [loadingChws, setLoadingChws] = useState(false);
+  const [isChwModalOpen, setIsChwModalOpen] = useState(false);
+  const [chwModalLoading, setChwModalLoading] = useState(false);
+  const [chwModalError, setChwModalError] = useState('');
+  const [chwModalSuccess, setChwModalSuccess] = useState('');
+
+  const [chwForm, setChwForm] = useState({
+    employee_id: '',
+    fullname: '',
+    id_number: '',
+    gender: 'Male',
+    password: '',
+    email: '',
+    phone_number: '',
+    house_number: '',
+    surbub: '',
+    municipality: '',
+    city: ''
+  });
+
+  const fetchChws = async () => {
+    setLoadingChws(true);
+    try {
+      const response = await api.get('/auth/chws');
+      if (response.data && response.data.chws) {
+        setChws(response.data.chws);
+      }
+    } catch (err) {
+      console.error('Error fetching CHWs:', err);
+    } finally {
+      setLoadingChws(false);
+    }
+  };
+
+  const handleRegisterChw = async (e) => {
+    e.preventDefault();
+    setChwModalError('');
+    setChwModalSuccess('');
+    
+    if (chwForm.id_number.length !== 13) {
+      setChwModalError('National ID must be exactly 13 digits');
+      return;
+    }
+    if (chwForm.phone_number.length !== 10) {
+      setChwModalError('Phone number must be exactly 10 digits');
+      return;
+    }
+
+    setChwModalLoading(true);
+    try {
+      const response = await api.post('/auth/register-chw', chwForm);
+      if (response.data && response.data.chw) {
+        setChwModalSuccess('Community health worker registered successfully!');
+        
+        // Add new CHW to state list
+        const newChw = response.data.chw;
+        setChws([
+          ...chws,
+          {
+            ...chwForm,
+            id: newChw.id
+          }
+        ]);
+
+        // Reset form
+        setChwForm({
+          employee_id: '',
+          fullname: '',
+          id_number: '',
+          gender: 'Male',
+          password: '',
+          email: '',
+          phone_number: '',
+          house_number: '',
+          surbub: '',
+          municipality: '',
+          city: ''
+        });
+
+        // Close modal after 1.5s
+        setTimeout(() => {
+          setIsChwModalOpen(false);
+          setChwModalSuccess('');
+        }, 1500);
+      }
+    } catch (err) {
+      setChwModalError(err.response?.data?.message || 'Failed to register CHW');
+    } finally {
+      setChwModalLoading(false);
+    }
+  };
+
+  // Health Records state
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [healthRecord, setHealthRecord] = useState({
+    blood_type: '',
+    blood_pressure: '',
+    weight: '',
+    height: '',
+    sugar_level: '',
+    diagnosis: '',
+    on_treatment: false,
+    morning_time: '',
+    midday_time: '',
+    evening_time: '',
+    admission_date: '',
+    release_date: ''
+  });
+  const [routinesList, setRoutinesList] = useState([]);
+  const [loadingHealthRecord, setLoadingHealthRecord] = useState(false);
+  const [savingHealthRecord, setSavingHealthRecord] = useState(false);
+  const [isHealthRecordModalOpen, setIsHealthRecordModalOpen] = useState(false);
+  const [healthRecordError, setHealthRecordError] = useState('');
+  const [healthRecordSuccess, setHealthRecordSuccess] = useState('');
+
+  const openHealthRecord = async (patient) => {
+    setSelectedPatient(patient);
+    setLoadingHealthRecord(true);
+    setHealthRecordError('');
+    setHealthRecordSuccess('');
+    
+    const dbPatientId = patient.id.replace('PT-', '');
+    
+    try {
+      const response = await api.get(`/auth/patients/${dbPatientId}/health-record`);
+      if (response.data) {
+        const hr = response.data.healthRecord || {};
+        setHealthRecord({
+          blood_type: hr.blood_type || '',
+          blood_pressure: hr.blood_pressure || '',
+          weight: hr.weight || '',
+          height: hr.height || '',
+          sugar_level: hr.sugar_level || '',
+          diagnosis: hr.diagnosis || '',
+          on_treatment: hr.on_treatment === true,
+          morning_time: hr.morning_time || '',
+          midday_time: hr.midday_time || '',
+          evening_time: hr.evening_time || '',
+          admission_date: hr.admission_date ? hr.admission_date.split('T')[0] : '',
+          release_date: hr.release_date ? hr.release_date.split('T')[0] : ''
+        });
+        setRoutinesList(response.data.routines || []);
+        setIsHealthRecordModalOpen(true);
+      }
+    } catch (err) {
+      console.error('Error fetching health record:', err);
+      alert('Failed to retrieve patient health records. Please try again.');
+    } finally {
+      setLoadingHealthRecord(false);
+    }
+  };
+
+  const handleSaveHealthRecord = async (e) => {
+    e.preventDefault();
+    setSavingHealthRecord(true);
+    setHealthRecordError('');
+    setHealthRecordSuccess('');
+    
+    const dbPatientId = selectedPatient.id.replace('PT-', '');
+    
+    try {
+      await api.put(`/auth/patients/${dbPatientId}/health-record`, {
+        ...healthRecord,
+        routines: routinesList
+      });
+      setHealthRecordSuccess('Health record and routines saved successfully!');
+      setTimeout(() => {
+        setIsHealthRecordModalOpen(false);
+        setHealthRecordSuccess('');
+      }, 1500);
+    } catch (err) {
+      console.error('Error saving health record:', err);
+      setHealthRecordError(err.response?.data?.message || 'Failed to save health record');
+    } finally {
+      setSavingHealthRecord(false);
+    }
+  };
+
+  const handleAddRoutine = () => {
+    setRoutinesList([
+      ...routinesList,
+      {
+        weekly: false,
+        monthly: false,
+        weekday: 'Monday',
+        day_of_month: 1,
+        time: '08:00',
+        description: 'Doctor visit/ checkup',
+        status: false
+      }
+    ]);
+  };
+
+  const handleRemoveRoutine = (index) => {
+    setRoutinesList(routinesList.filter((_, i) => i !== index));
+  };
+
+  const handleRoutineChange = (index, field, value) => {
+    setRoutinesList(routinesList.map((r, i) => {
+      if (i === index) {
+        return { ...r, [field]: value };
+      }
+      return r;
+    }));
+  };
+
+  // Clinical Staff state
+  const [staff, setStaff] = useState([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
+  const [staffModalLoading, setStaffModalLoading] = useState(false);
+  const [staffModalError, setStaffModalError] = useState('');
+  const [staffModalSuccess, setStaffModalSuccess] = useState('');
+
+  const [staffForm, setStaffForm] = useState({
+    employee_id: '',
+    fullname: '',
+    id_number: '',
+    gender: 'Male',
+    role: 'doctor/nurse',
+    password: '',
+    email: '',
+    phone_number: '',
+    house_number: '',
+    surbub: '',
+    municipality: '',
+    city: ''
+  });
+
+  const fetchStaff = async () => {
+    setLoadingStaff(true);
+    try {
+      const response = await api.get('/auth/staff');
+      if (response.data && response.data.staff) {
+        setStaff(response.data.staff);
+      }
+    } catch (err) {
+      console.error('Error fetching clinical staff:', err);
+    } finally {
+      setLoadingStaff(false);
+    }
+  };
+
+  const handleRegisterStaff = async (e) => {
+    e.preventDefault();
+    setStaffModalError('');
+    setStaffModalSuccess('');
+    
+    if (staffForm.id_number.length !== 13) {
+      setStaffModalError('National ID must be exactly 13 digits');
+      return;
+    }
+    if (staffForm.phone_number.length !== 10) {
+      setStaffModalError('Phone number must be exactly 10 digits');
+      return;
+    }
+
+    setStaffModalLoading(true);
+    try {
+      const response = await api.post('/auth/register-staff', staffForm);
+      if (response.data && response.data.staff) {
+        setStaffModalSuccess('Clinical staff member registered successfully!');
+        
+        // Add new staff member to state list
+        const newStaff = response.data.staff;
+        setStaff([
+          ...staff,
+          {
+            ...staffForm,
+            id: newStaff.id,
+            staff_role: newStaff.role
+          }
+        ]);
+
+        // Reset form
+        setStaffForm({
+          employee_id: '',
+          fullname: '',
+          id_number: '',
+          gender: 'Male',
+          role: 'doctor/nurse',
+          password: '',
+          email: '',
+          phone_number: '',
+          house_number: '',
+          surbub: '',
+          municipality: '',
+          city: ''
+        });
+
+        // Close modal after 1.5s
+        setTimeout(() => {
+          setIsStaffModalOpen(false);
+          setStaffModalSuccess('');
+        }, 1500);
+      }
+    } catch (err) {
+      setStaffModalError(err.response?.data?.message || 'Failed to register clinical staff member');
+    } finally {
+      setStaffModalLoading(false);
+    }
+  };
+
+  // Referrals State
+  const [referrals, setReferrals] = useState({ incoming: [], outgoing: [] });
+  const [loadingReferrals, setLoadingReferrals] = useState(false);
+  const [isReferralModalOpen, setIsReferralModalOpen] = useState(false);
+  const [referralModalLoading, setReferralModalLoading] = useState(false);
+  const [referralModalError, setReferralModalError] = useState('');
+  const [referralModalSuccess, setReferralModalSuccess] = useState('');
+  const [organizationsList, setOrganizationsList] = useState([]);
+  const [orgStaffList, setOrgStaffList] = useState([]);
+  const [orgPatientsList, setOrgPatientsList] = useState([]);
+
+  // Search queries for referral modal selectors
+  const [patientQuery, setPatientQuery] = useState('');
+  const [orgQuery, setOrgQuery] = useState('');
+  const [deptQuery, setDeptQuery] = useState('');
+  const [staffQuery, setStaffQuery] = useState('');
+
+  const [referralForm, setReferralForm] = useState({
+    personel: '',
+    organization_to: '',
+    department_to: 'General Medicine',
+    staff_to: '',
+    reason: '',
+    arrival_date: '',
+    arrival_time: ''
+  });
+
+  const fetchReferrals = async () => {
+    setLoadingReferrals(true);
+    try {
+      const response = await api.get('/auth/referrals');
+      if (response.data) {
+        setReferrals({
+          incoming: response.data.incoming || [],
+          outgoing: response.data.outgoing || []
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching referrals:', err);
+    } finally {
+      setLoadingReferrals(false);
+    }
+  };
+
+  const fetchOrganizations = async () => {
+    try {
+      const response = await api.get('/auth/organizations');
+      if (response.data && response.data.organizations) {
+        setOrganizationsList(response.data.organizations);
+      }
+    } catch (err) {
+      console.error('Error fetching organizations list:', err);
+    }
+  };
+
+  const fetchOrganizationPatients = async () => {
+    try {
+      const response = await api.get('/auth/organization-patients');
+      if (response.data && response.data.patients) {
+        setOrgPatientsList(response.data.patients);
+      }
+    } catch (err) {
+      console.error('Error fetching organization patients:', err);
+    }
+  };
+
+  const handleOrgChange = async (orgName) => {
+    setReferralForm(prev => ({ ...prev, organization_to: orgName, staff_to: '' }));
+    setOrgStaffList([]);
+    if (!orgName) return;
+    try {
+      const response = await api.get(`/auth/organizations/${encodeURIComponent(orgName)}/staff`);
+      if (response.data && response.data.staff) {
+        setOrgStaffList(response.data.staff);
+      }
+    } catch (err) {
+      console.error('Error fetching organization staff:', err);
+    }
+  };
+
+  const handleCreateReferral = async (e) => {
+    e.preventDefault();
+    setReferralModalError('');
+    setReferralModalSuccess('');
+    setReferralModalLoading(true);
+
+    try {
+      await api.post('/auth/referrals', referralForm);
+      setReferralModalSuccess('Referral created successfully!');
+      fetchReferrals();
+      setReferralForm({
+        personel: '',
+        organization_to: '',
+        department_to: 'General Medicine',
+        staff_to: '',
+        reason: '',
+        arrival_date: '',
+        arrival_time: ''
+      });
+      setPatientQuery('');
+      setOrgQuery('');
+      setDeptQuery('');
+      setStaffQuery('');
+      setTimeout(() => {
+        closeReferralModal();
+      }, 1500);
+    } catch (err) {
+      setReferralModalError(err.response?.data?.message || 'Failed to create referral');
+    } finally {
+      setReferralModalLoading(false);
+    }
+  };
+
+  const closeReferralModal = () => {
+    setIsReferralModalOpen(false);
+    setReferralModalError('');
+    setReferralModalSuccess('');
+    setPatientQuery('');
+    setOrgQuery('');
+    setDeptQuery('');
+    setStaffQuery('');
+  };
+
+  const handleUpdateReferralStatus = async (refId) => {
+    try {
+      await api.put(`/auth/referrals/${refId}/status`);
+      fetchReferrals();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update referral status');
+    }
+  };
+
   useEffect(() => {
     fetchPatients();
+    fetchChws();
+    fetchStaff();
+    fetchReferrals();
+    fetchOrganizations();
+    fetchOrganizationPatients();
   }, []);
 
   // Modal State
@@ -203,10 +646,26 @@ function Dashboard({ user, onLogout, actionLoading }) {
   const sidebarItems = [
     { id: 'overview', name: 'Overview', icon: LayoutDashboard },
     { id: 'patients', name: 'Patients', icon: Users },
+    { id: 'chws', name: 'Comm. Health Workers', icon: UserIcon },
+    { id: 'staff', name: 'Clinical Staff', icon: ShieldCheck },
     { id: 'appointments', name: 'Appointments', icon: Calendar },
     { id: 'referrals', name: 'Referrals', icon: ArrowLeftRight },
     { id: 'chat', name: 'Chat Room', icon: MessageSquare }
   ];
+
+  const filteredPatients = orgPatientsList.filter(p => 
+    p.fullname.toLowerCase().includes(patientQuery.toLowerCase())
+  );
+  const filteredOrgs = organizationsList.filter(org => 
+    org.toLowerCase().includes(orgQuery.toLowerCase())
+  );
+  const departments = ['General Medicine', 'Cardiology', 'Pediatrics', 'Orthopedics', 'Dermatology', 'Neurology', 'Endocrinology', 'Nephrology', 'Obstetrics & Gynecology', 'Psychiatry', 'Physical Therapy'];
+  const filteredDepts = departments.filter(dept => 
+    dept.toLowerCase().includes(deptQuery.toLowerCase())
+  );
+  const filteredStaff = orgStaffList.filter(s => 
+    s.fullname.toLowerCase().includes(staffQuery.toLowerCase())
+  );
 
   if (!user) return null;
 
@@ -349,7 +808,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
                   { title: 'Total Patients', value: patients.length.toString(), change: 'Registered by you', icon: Users, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
                   { title: 'Appointments Today', value: '8', change: 'Next at 10:30 AM', icon: Calendar, color: 'text-sky-400 bg-sky-500/10 border-sky-500/20' },
                   { title: 'Pending Referrals', value: '3', change: 'Requires Action', icon: ArrowLeftRight, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
-                  { title: 'Active Health Workers', value: '45', change: '8 online', icon: ShieldCheck, color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' }
+                  { title: 'Active Health Workers', value: chws.length.toString(), change: 'Registered in organization', icon: ShieldCheck, color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' }
                 ].map((stat, i) => {
                   const StatIcon = stat.icon;
                   return (
@@ -492,7 +951,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
                       </tr>
                     ) : (
                       patients.map((pt) => (
-                        <tr key={pt.id} className="hover:bg-slate-800/20 transition-colors">
+                        <tr key={pt.id} onClick={() => openHealthRecord(pt)} className="hover:bg-slate-800/20 transition-colors cursor-pointer">
                           <td className="py-3.5 px-4 font-bold text-slate-200">
                             {pt.name}
                             <span className="block text-[10px] text-slate-500 font-mono mt-0.5">{pt.id}</span>
@@ -510,6 +969,188 @@ function Dashboard({ user, onLogout, actionLoading }) {
                           </td>
                         </tr>
                       ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ================= PAGE: COMMUNITY HEALTH WORKERS ================= */}
+          {activeTab === 'chws' && (
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                <div className="space-y-0.5">
+                  <h3 className="font-bold text-slate-200">Community Health Workers</h3>
+                  <p className="text-slate-500 text-xs">List of registered community health workers in your organization</p>
+                </div>
+                <button 
+                  onClick={() => setIsChwModalOpen(true)}
+                  className="py-2 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors"
+                >
+                  <Plus className="h-4 w-4" /> Add CHW
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-slate-400 text-xs">
+                      <th className="py-3 px-4">Name & Employee ID</th>
+                      <th className="py-3 px-4">Gender & Age</th>
+                      <th className="py-3 px-4">Contact Info</th>
+                      <th className="py-3 px-4">Location</th>
+                      <th className="py-3 px-4">National ID</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/80">
+                    {loadingChws ? (
+                      <tr>
+                        <td colSpan="5" className="py-8 text-center text-slate-550">
+                          <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-400" />
+                          Loading community health workers...
+                        </td>
+                      </tr>
+                    ) : chws.length === 0 ? (
+                      <tr>
+                        <td colSpan="5" className="py-8 text-center text-slate-550">
+                          No community health workers found. Click "Add CHW" to register one.
+                        </td>
+                      </tr>
+                    ) : (
+                      chws.map((chw) => (
+                        <tr key={chw.id} className="hover:bg-slate-800/20 transition-colors">
+                          <td className="py-3.5 px-4 font-bold text-slate-200">
+                            {chw.fullname}
+                            <span className="block text-[10px] text-slate-500 font-mono mt-0.5">Emp ID: {chw.employee_id}</span>
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-400">
+                            {chw.gender}, {calculateAgeFromId(chw.id_number)}
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-350">
+                            <span className="block text-slate-200">{chw.phone_number}</span>
+                            <span className="block text-xs text-slate-500">{chw.email || 'No email provided'}</span>
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-400">
+                            {chw.surbub}, {chw.city}
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-xs text-slate-500">{chw.id_number}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ================= PAGE: CLINICAL STAFF ================= */}
+          {activeTab === 'staff' && (
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-slate-800">
+                <div className="space-y-0.5">
+                  <h3 className="font-bold text-slate-200">Clinical Staff</h3>
+                  <p className="text-slate-500 text-xs">List of registered clinical staff members in your organization</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder="Search name, ID, specialty..."
+                      value={staffSearchQuery}
+                      onChange={(e) => setStaffSearchQuery(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 w-60 transition-all"
+                    />
+                  </div>
+                  <button 
+                    onClick={() => setIsStaffModalOpen(true)}
+                    className="py-2 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors"
+                  >
+                    <Plus className="h-4 w-4" /> Add Staff Member
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-slate-400 text-xs">
+                      <th className="py-3 px-4">Name & Employee ID</th>
+                      <th className="py-3 px-4">Role/Specialty</th>
+                      <th className="py-3 px-4">Gender & Age</th>
+                      <th className="py-3 px-4">Contact Info</th>
+                      <th className="py-3 px-4">Location</th>
+                      <th className="py-3 px-4">National ID</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/80">
+                    {loadingStaff ? (
+                      <tr>
+                        <td colSpan="6" className="py-8 text-center text-slate-500">
+                          <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-400" />
+                          Loading clinical staff...
+                        </td>
+                      </tr>
+                    ) : staff.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="py-8 text-center text-slate-500">
+                          No clinical staff members found. Click "Add Staff Member" to register one.
+                        </td>
+                      </tr>
+                    ) : staff.filter(cs => {
+                      const query = staffSearchQuery.toLowerCase();
+                      return (
+                        cs.fullname?.toLowerCase().includes(query) ||
+                        cs.employee_id?.toLowerCase().includes(query) ||
+                        cs.staff_role?.toLowerCase().includes(query)
+                      );
+                    }).length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="py-8 text-center text-slate-500">
+                          No clinical staff matched your search query.
+                        </td>
+                      </tr>
+                    ) : (
+                      staff
+                        .filter(cs => {
+                          const query = staffSearchQuery.toLowerCase();
+                          return (
+                            cs.fullname?.toLowerCase().includes(query) ||
+                            cs.employee_id?.toLowerCase().includes(query) ||
+                            cs.staff_role?.toLowerCase().includes(query)
+                          );
+                        })
+                        .map((cs) => (
+                          <tr key={cs.id} className="hover:bg-slate-800/20 transition-colors">
+                            <td className="py-3.5 px-4 font-bold text-slate-200">
+                              {cs.fullname}
+                              <span className="block text-[10px] text-slate-500 font-mono mt-0.5">Emp ID: {cs.employee_id}</span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                cs.staff_role === 'doctor/nurse' 
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                  : cs.staff_role === 'social worker'
+                                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                  : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                              }`}>
+                                {cs.staff_role}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-400">
+                              {cs.gender}, {calculateAgeFromId(cs.id_number)}
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-350">
+                              <span className="block text-slate-200">{cs.phone_number}</span>
+                              <span className="block text-xs text-slate-500">{cs.email || 'No email provided'}</span>
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-400">
+                              {cs.house_number} {cs.surbub}, {cs.city}
+                            </td>
+                            <td className="py-3.5 px-4 font-mono text-xs text-slate-500">{cs.id_number}</td>
+                          </tr>
+                        ))
                     )}
                   </tbody>
                 </table>
@@ -567,52 +1208,159 @@ function Dashboard({ user, onLogout, actionLoading }) {
 
           {/* ================= PAGE: REFERRALS ================= */}
           {activeTab === 'referrals' && (
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-                <div className="space-y-0.5">
-                  <h3 className="font-bold text-slate-200">Patient Referrals</h3>
-                  <p className="text-slate-500 text-xs">Medical transfers across health networks</p>
+            <div className="space-y-6">
+              {/* Incoming Referrals */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                  <div className="space-y-0.5">
+                    <h3 className="font-bold text-slate-200">Incoming Referrals</h3>
+                    <p className="text-slate-500 text-xs">Patients referred to {user.organization}</p>
+                  </div>
+                  <button 
+                    onClick={() => { setIsReferralModalOpen(true); fetchOrganizations(); fetchOrganizationPatients(); }}
+                    className="py-2 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors"
+                  >
+                    <Plus className="h-4 w-4" /> Create Referral
+                  </button>
                 </div>
-                <button className="py-2 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors">
-                  <Plus className="h-4 w-4" /> Create Referral
-                </button>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 text-xs">
+                        <th className="py-3 px-4">Patient</th>
+                        <th className="py-3 px-4">Origin / Referrer</th>
+                        <th className="py-3 px-4">Department & Destination</th>
+                        <th className="py-3 px-4">Arrival Date / Time</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/80">
+                      {loadingReferrals ? (
+                        <tr>
+                          <td colSpan="6" className="py-8 text-center text-slate-500">
+                            <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-400" />
+                            Loading incoming referrals...
+                          </td>
+                        </tr>
+                      ) : referrals.incoming.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="py-8 text-center text-slate-500">
+                            No incoming referrals found.
+                          </td>
+                        </tr>
+                      ) : (
+                        referrals.incoming.map((ref) => (
+                          <tr key={ref.id} className="hover:bg-slate-800/20 transition-colors">
+                            <td className="py-3.5 px-4 font-bold text-slate-200">
+                              {ref.personel}
+                              <span className="block text-[10px] text-slate-500 font-mono mt-0.5">Ref ID: #{ref.id}</span>
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-300">
+                              <span className="block capitalize">{ref.referrer_role}</span>
+                              <span className="block text-xs text-slate-550">ID: {ref.referrer_id}</span>
+                            </td>
+                            <td className="py-3.5 px-4 text-xs">
+                              <span className="block text-slate-200">{ref.department_to}</span>
+                              <span className="block text-slate-400 mt-0.5">Recipient: {ref.staff_to || 'Organization Admin'}</span>
+                            </td>
+                            <td className="py-3.5 px-4 font-mono text-xs text-slate-350">
+                              {ref.arrival_date ? ref.arrival_date.split('T')[0] : 'N/A'} 
+                              <span className="block text-slate-500 mt-0.5">{ref.arrival_time || ''}</span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                ref.status ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
+                              }`}>
+                                {ref.status ? 'Attended' : 'Pending'}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              {!ref.status && !ref.staff_to ? (
+                                <button
+                                  onClick={() => handleUpdateReferralStatus(ref.id)}
+                                  className="py-1 px-2.5 bg-emerald-500 hover:bg-emerald-450 text-slate-950 text-xs font-bold rounded-lg transition-colors"
+                                >
+                                  Mark Attended
+                                </button>
+                              ) : !ref.status && ref.staff_to ? (
+                                <span className="text-slate-550 text-[10px] italic">Only designated staff can attend</span>
+                              ) : (
+                                <span className="text-emerald-500 text-xs font-semibold">Complete</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-800 text-slate-400 text-xs">
-                      <th className="py-3 px-4">Referral ID</th>
-                      <th className="py-3 px-4">Patient</th>
-                      <th className="py-3 px-4">Referral Source & Target</th>
-                      <th className="py-3 px-4">Department</th>
-                      <th className="py-3 px-4">Date</th>
-                      <th className="py-3 px-4">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/80">
-                    {referralsList.map((ref) => (
-                      <tr key={ref.id} className="hover:bg-slate-800/20 transition-colors">
-                        <td className="py-3.5 px-4 font-mono text-xs text-slate-300">{ref.id}</td>
-                        <td className="py-3.5 px-4 font-bold text-slate-200">{ref.patient}</td>
-                        <td className="py-3.5 px-4 text-xs">
-                          <span className="text-slate-400">{ref.from}</span>
-                          <ChevronRight className="inline-block h-3.5 w-3.5 text-slate-500 mx-1" />
-                          <span className="text-emerald-400">{ref.to}</span>
-                        </td>
-                        <td className="py-3.5 px-4 text-slate-300">{ref.department}</td>
-                        <td className="py-3.5 px-4 font-mono text-xs text-slate-500">{ref.date}</td>
-                        <td className="py-3.5 px-4">
-                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                            ref.status === 'Pending Review' ? 'bg-amber-500/10 text-amber-400 animate-pulse' : 'bg-emerald-500/10 text-emerald-400'
-                          }`}>
-                            {ref.status}
-                          </span>
-                        </td>
+              {/* Outgoing Referrals */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div className="pb-4 border-b border-slate-800">
+                  <h3 className="font-bold text-slate-200">Outgoing Referrals</h3>
+                  <p className="text-slate-500 text-xs">Patients you have referred to other health networks</p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 text-xs">
+                        <th className="py-3 px-4">Patient</th>
+                        <th className="py-3 px-4">Target Organization</th>
+                        <th className="py-3 px-4">Department & Destination</th>
+                        <th className="py-3 px-4">Arrival Date / Time</th>
+                        <th className="py-3 px-4">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/80">
+                      {loadingReferrals ? (
+                        <tr>
+                          <td colSpan="5" className="py-8 text-center text-slate-500">
+                            <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-400" />
+                            Loading outgoing referrals...
+                          </td>
+                        </tr>
+                      ) : referrals.outgoing.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="py-8 text-center text-slate-500">
+                            No outgoing referrals found.
+                          </td>
+                        </tr>
+                      ) : (
+                        referrals.outgoing.map((ref) => (
+                          <tr key={ref.id} className="hover:bg-slate-800/20 transition-colors">
+                            <td className="py-3.5 px-4 font-bold text-slate-200">
+                              {ref.personel}
+                              <span className="block text-[10px] text-slate-500 font-mono mt-0.5">Ref ID: #{ref.id}</span>
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-300 font-semibold">
+                              {ref.organization_to}
+                            </td>
+                            <td className="py-3.5 px-4 text-xs">
+                              <span className="block text-slate-200">{ref.department_to}</span>
+                              <span className="block text-slate-400 mt-0.5">Recipient: {ref.staff_to || 'Organization Admin'}</span>
+                            </td>
+                            <td className="py-3.5 px-4 font-mono text-xs text-slate-350">
+                              {ref.arrival_date ? ref.arrival_date.split('T')[0] : 'N/A'}
+                              <span className="block text-slate-500 mt-0.5">{ref.arrival_time || ''}</span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                ref.status ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
+                              }`}>
+                                {ref.status ? 'Attended' : 'Pending'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
@@ -902,6 +1650,968 @@ function Dashboard({ user, onLogout, actionLoading }) {
                 >
                   {modalLoading && <Loader2 className="h-5 w-5 animate-spin" />}
                   {modalLoading ? 'Registering Patient...' : 'Register Patient'}
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= CHW REGISTRATION MODAL ================= */}
+      {isChwModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => { setIsChwModalOpen(false); setChwModalError(''); setChwModalSuccess(''); }}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <h2 className="text-xl font-bold text-white">Register New Community Health Worker</h2>
+              <p className="text-slate-400 text-xs mt-1">Provide all details to add the worker to the organization.</p>
+            </div>
+
+            {/* Error & Success Notification */}
+            {chwModalError && (
+              <div className="bg-red-950/40 border border-red-500/25 text-red-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{chwModalError}</span>
+              </div>
+            )}
+            {chwModalSuccess && (
+              <div className="bg-emerald-950/40 border border-emerald-500/25 text-emerald-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{chwModalSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleRegisterChw} className="space-y-6">
+              
+              {/* Group 1: General Info */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">General Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Full Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Firstname Lastname"
+                      value={chwForm.fullname}
+                      onChange={(e) => setChwForm({...chwForm, fullname: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-semibold">Gender *</label>
+                      <select
+                        value={chwForm.gender}
+                        onChange={(e) => setChwForm({...chwForm, gender: e.target.value})}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                      >
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-semibold">National ID *</label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={13}
+                        placeholder="13-digit ID"
+                        value={chwForm.id_number}
+                        onChange={(e) => setChwForm({...chwForm, id_number: e.target.value.replace(/\D/g, '')})}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Employee ID *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. CHW-102"
+                      value={chwForm.employee_id}
+                      onChange={(e) => setChwForm({...chwForm, employee_id: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Phone Number *</label>
+                    <input
+                      type="tel"
+                      required
+                      maxLength={10}
+                      placeholder="10-digit phone"
+                      value={chwForm.phone_number}
+                      onChange={(e) => setChwForm({...chwForm, phone_number: e.target.value.replace(/\D/g, '')})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Email Address</label>
+                    <input
+                      type="email"
+                      placeholder="chw@hospital.com"
+                      value={chwForm.email}
+                      onChange={(e) => setChwForm({...chwForm, email: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Portal Password *</label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Choose password"
+                      value={chwForm.password}
+                      onChange={(e) => setChwForm({...chwForm, password: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Group 2: Address Info */}
+              <div className="space-y-4 pt-2">
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Address Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">House Number *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 14B"
+                      value={chwForm.house_number}
+                      onChange={(e) => setChwForm({...chwForm, house_number: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Suburb *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Melville"
+                      value={chwForm.surbub}
+                      onChange={(e) => setChwForm({...chwForm, surbub: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Municipality *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. City of Joburg"
+                      value={chwForm.municipality}
+                      onChange={(e) => setChwForm({...chwForm, municipality: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">City *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Johannesburg"
+                      value={chwForm.city}
+                      onChange={(e) => setChwForm({...chwForm, city: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-4 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => { setIsChwModalOpen(false); setChwModalError(''); setChwModalSuccess(''); }}
+                  className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={chwModalLoading}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  {chwModalLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+                  {chwModalLoading ? 'Registering CHW...' : 'Register CHW'}
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= CLINICAL STAFF REGISTRATION MODAL ================= */}
+      {isStaffModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => { setIsStaffModalOpen(false); setStaffModalError(''); setStaffModalSuccess(''); }}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <h2 className="text-xl font-bold text-white">Register New Clinical Staff Member</h2>
+              <p className="text-slate-400 text-xs mt-1">Provide all details to add the clinical staff member to the organization.</p>
+            </div>
+
+            {/* Error & Success Notification */}
+            {staffModalError && (
+              <div className="bg-red-950/40 border border-red-500/25 text-red-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{staffModalError}</span>
+              </div>
+            )}
+            {staffModalSuccess && (
+              <div className="bg-emerald-950/40 border border-emerald-500/25 text-emerald-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{staffModalSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleRegisterStaff} className="space-y-6">
+              
+              {/* Group 1: General Info */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">General Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Full Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Firstname Lastname"
+                      value={staffForm.fullname}
+                      onChange={(e) => setStaffForm({...staffForm, fullname: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-semibold">Gender *</label>
+                      <select
+                        value={staffForm.gender}
+                        onChange={(e) => setStaffForm({...staffForm, gender: e.target.value})}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                      >
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-semibold">National ID *</label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={13}
+                        placeholder="13-digit ID"
+                        value={staffForm.id_number}
+                        onChange={(e) => setStaffForm({...staffForm, id_number: e.target.value.replace(/\D/g, '')})}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Employee ID *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. DOC-301"
+                      value={staffForm.employee_id}
+                      onChange={(e) => setStaffForm({...staffForm, employee_id: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Role/Specialty *</label>
+                    <select
+                      value={staffForm.role}
+                      onChange={(e) => setStaffForm({...staffForm, role: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                    >
+                      <option value="doctor/nurse">Doctor / Nurse</option>
+                      <option value="social worker">Social Worker</option>
+                      <option value="therapist">Therapist</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Phone Number *</label>
+                    <input
+                      type="tel"
+                      required
+                      maxLength={10}
+                      placeholder="10-digit phone"
+                      value={staffForm.phone_number}
+                      onChange={(e) => setStaffForm({...staffForm, phone_number: e.target.value.replace(/\D/g, '')})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Email Address</label>
+                    <input
+                      type="email"
+                      placeholder="staff@hospital.com"
+                      value={staffForm.email}
+                      onChange={(e) => setStaffForm({...staffForm, email: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Portal Password *</label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Choose password"
+                      value={staffForm.password}
+                      onChange={(e) => setStaffForm({...staffForm, password: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Group 2: Address Info */}
+              <div className="space-y-4 pt-2">
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Address Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">House Number *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 14B"
+                      value={staffForm.house_number}
+                      onChange={(e) => setStaffForm({...staffForm, house_number: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Suburb *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Melville"
+                      value={staffForm.surbub}
+                      onChange={(e) => setStaffForm({...staffForm, surbub: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Municipality *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. City of Joburg"
+                      value={staffForm.municipality}
+                      onChange={(e) => setStaffForm({...staffForm, municipality: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">City *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Johannesburg"
+                      value={staffForm.city}
+                      onChange={(e) => setStaffForm({...staffForm, city: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-4 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => { setIsStaffModalOpen(false); setStaffModalError(''); setStaffModalSuccess(''); }}
+                  className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={staffModalLoading}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  {staffModalLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+                  {staffModalLoading ? 'Registering Staff...' : 'Register Staff Member'}
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= PATIENT HEALTH RECORD MODAL ================= */}
+      {isHealthRecordModalOpen && selectedPatient && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => { setIsHealthRecordModalOpen(false); setHealthRecordError(''); setHealthRecordSuccess(''); }}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <div className="flex justify-between items-baseline">
+                <h2 className="text-xl font-bold text-white">Health Record: {selectedPatient.name}</h2>
+                <span className="text-xs text-slate-500 font-mono">Patient ID: {selectedPatient.id}</span>
+              </div>
+              <p className="text-slate-400 text-xs mt-1">Review clinical readings, configure active treatments, and update scheduled care routines.</p>
+            </div>
+
+            {/* Error & Success Notification */}
+            {healthRecordError && (
+              <div className="bg-red-950/40 border border-red-500/25 text-red-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{healthRecordError}</span>
+              </div>
+            )}
+            {healthRecordSuccess && (
+              <div className="bg-emerald-950/40 border border-emerald-500/25 text-emerald-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{healthRecordSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveHealthRecord} className="space-y-6">
+              
+              {/* Grid 1: Clinical Diagnostics */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Clinical Measurements</h3>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Blood Type</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. O+"
+                      value={healthRecord.blood_type}
+                      onChange={(e) => setHealthRecord({...healthRecord, blood_type: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Blood Pressure</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="mmHg"
+                      value={healthRecord.blood_pressure}
+                      onChange={(e) => setHealthRecord({...healthRecord, blood_pressure: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Sugar Level</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="mmol/L"
+                      value={healthRecord.sugar_level}
+                      onChange={(e) => setHealthRecord({...healthRecord, sugar_level: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Weight (kg)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="kg"
+                      value={healthRecord.weight}
+                      onChange={(e) => setHealthRecord({...healthRecord, weight: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Height (cm)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="cm"
+                      value={healthRecord.height}
+                      onChange={(e) => setHealthRecord({...healthRecord, height: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="text-xs text-slate-400 font-semibold">Diagnosis</label>
+                    <input
+                      type="text"
+                      placeholder="Describe findings / conditions"
+                      value={healthRecord.diagnosis}
+                      onChange={(e) => setHealthRecord({...healthRecord, diagnosis: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-semibold">Admission Date</label>
+                      <input
+                        type="date"
+                        value={healthRecord.admission_date}
+                        onChange={(e) => setHealthRecord({...healthRecord, admission_date: e.target.value})}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-semibold">Release Date</label>
+                      <input
+                        type="date"
+                        value={healthRecord.release_date}
+                        onChange={(e) => setHealthRecord({...healthRecord, release_date: e.target.value})}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Treatment config */}
+              <div className="space-y-4 pt-2 border-t border-slate-800">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="on_treatment"
+                    checked={healthRecord.on_treatment}
+                    onChange={(e) => setHealthRecord({...healthRecord, on_treatment: e.target.checked})}
+                    className="h-4.5 w-4.5 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 focus:ring-opacity-20 focus:ring-2 bg-slate-950"
+                  />
+                  <label htmlFor="on_treatment" className="text-sm font-semibold text-slate-200 cursor-pointer">
+                    On Treatment
+                  </label>
+                </div>
+
+                {healthRecord.on_treatment && (
+                  <div className="bg-slate-950/40 border border-slate-800/80 rounded-2xl p-4 space-y-3 animate-fadeIn">
+                    <span className="text-xs font-semibold text-slate-400 block">Configure medication taking schedule (times of the day):</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-slate-500 font-semibold uppercase">Morning Time</label>
+                        <input
+                          type="time"
+                          value={healthRecord.morning_time}
+                          onChange={(e) => setHealthRecord({...healthRecord, morning_time: e.target.value})}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-slate-500 font-semibold uppercase">Midday Time</label>
+                        <input
+                          type="time"
+                          value={healthRecord.midday_time}
+                          onChange={(e) => setHealthRecord({...healthRecord, midday_time: e.target.value})}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-slate-500 font-semibold uppercase">Evening Time</label>
+                        <input
+                          type="time"
+                          value={healthRecord.evening_time}
+                          onChange={(e) => setHealthRecord({...healthRecord, evening_time: e.target.value})}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Care Routines manager */}
+              <div className="space-y-4 pt-4 border-t border-slate-800">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Scheduled Care Routines</h3>
+                  <button
+                    type="button"
+                    onClick={handleAddRoutine}
+                    className="py-1.5 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-bold rounded-lg flex items-center gap-1 transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add Care Routine
+                  </button>
+                </div>
+
+                <div className="space-y-3.5 max-h-[300px] overflow-y-auto pr-1">
+                  {routinesList.length === 0 ? (
+                    <p className="text-xs text-slate-500 text-center py-6 border border-dashed border-slate-800 rounded-2xl bg-slate-950/20">
+                      No routines scheduled. Add one to track appointments, checks, or refills.
+                    </p>
+                  ) : (
+                    routinesList.map((routine, idx) => (
+                      <div key={idx} className="bg-slate-950/30 border border-slate-800/80 rounded-2xl p-4 flex flex-col gap-3 relative">
+                        
+                        {/* Remove button */}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveRoutine(idx)}
+                          className="absolute top-4 right-4 text-slate-500 hover:text-red-400 transition-colors"
+                          title="Remove routine"
+                        >
+                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                          
+                          {/* Routine Description Selector */}
+                          <div className="md:col-span-4 space-y-1">
+                            <label className="text-[10px] text-slate-500 font-semibold uppercase">Routine Type *</label>
+                            <select
+                              value={routine.description}
+                              onChange={(e) => handleRoutineChange(idx, 'description', e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                            >
+                              <option value="Doctor visit/ checkup">Doctor visit/ checkup</option>
+                              <option value="medicine refill">medicine refill</option>
+                            </select>
+                          </div>
+
+                          {/* Time */}
+                          <div className="md:col-span-2 space-y-1">
+                            <label className="text-[10px] text-slate-500 font-semibold uppercase">Time *</label>
+                            <input
+                              type="time"
+                              required
+                              value={routine.time}
+                              onChange={(e) => handleRoutineChange(idx, 'time', e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
+                            />
+                          </div>
+
+                          {/* Frequency selectors */}
+                          <div className="md:col-span-4 flex gap-4 items-center h-full pt-4">
+                            <label className="flex items-center gap-1.5 text-xs text-slate-350 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={routine.weekly}
+                                onChange={(e) => handleRoutineChange(idx, 'weekly', e.target.checked)}
+                                className="h-4 w-4 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-900"
+                              />
+                              Weekly
+                            </label>
+                            <label className="flex items-center gap-1.5 text-xs text-slate-350 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={routine.monthly}
+                                onChange={(e) => handleRoutineChange(idx, 'monthly', e.target.checked)}
+                                className="h-4 w-4 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-900"
+                              />
+                              Monthly
+                            </label>
+                          </div>
+
+                          {/* Status checklist */}
+                          <div className="md:col-span-2 flex items-center pt-4">
+                            <label className="flex items-center gap-1.5 text-xs text-slate-350 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={routine.status}
+                                onChange={(e) => handleRoutineChange(idx, 'status', e.target.checked)}
+                                className="h-4 w-4 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-900"
+                              />
+                              Attended
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Conditional inputs for weekly / monthly frequency details */}
+                        <div className="grid grid-cols-2 gap-4 border-t border-slate-900 pt-2 text-xs">
+                          {routine.weekly && (
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-500 font-semibold uppercase">Weekday</label>
+                              <select
+                                value={routine.weekday || 'Monday'}
+                                onChange={(e) => handleRoutineChange(idx, 'weekday', e.target.value)}
+                                className="bg-slate-900 border border-slate-850 rounded-xl py-1.5 px-3 w-full text-slate-200 outline-none"
+                              >
+                                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => (
+                                  <option key={d} value={d}>{d}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                          {routine.monthly && (
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-500 font-semibold uppercase">Day of Month</label>
+                              <input
+                                type="number"
+                                min={1}
+                                max={31}
+                                value={routine.day_of_month || 1}
+                                onChange={(e) => handleRoutineChange(idx, 'day_of_month', parseInt(e.target.value, 10))}
+                                className="bg-slate-900 border border-slate-850 rounded-xl py-1.5 px-3 w-full text-slate-200 outline-none font-mono"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-4 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => { setIsHealthRecordModalOpen(false); setHealthRecordError(''); setHealthRecordSuccess(''); }}
+                  className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingHealthRecord}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  {savingHealthRecord && <Loader2 className="h-5 w-5 animate-spin" />}
+                  {savingHealthRecord ? 'Saving Record...' : 'Save Health Record'}
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+      {/* ================= CREATE REFERRAL MODAL ================= */}
+      {isReferralModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={closeReferralModal}
+              className="absolute top-4 right-4 text-slate-550 hover:text-slate-350 transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <h2 className="text-xl font-bold text-white">Create New Referral</h2>
+              <p className="text-slate-400 text-xs mt-1">Initiate a transfer to another medical facility or staff member.</p>
+            </div>
+
+            {/* Error & Success Notification */}
+            {referralModalError && (
+              <div className="bg-red-950/40 border border-red-500/25 text-red-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{referralModalError}</span>
+              </div>
+            )}
+            {referralModalSuccess && (
+              <div className="bg-emerald-950/40 border border-emerald-500/25 text-emerald-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{referralModalSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleCreateReferral} className="space-y-4">
+              {/* Patient Selector */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs text-slate-400 font-semibold">Select Patient *</label>
+                  <input 
+                    type="text" 
+                    placeholder="Search patient by name..." 
+                    value={patientQuery}
+                    onChange={e => setPatientQuery(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-lg py-1 px-2.5 text-xs text-slate-300 placeholder-slate-600 outline-none focus:border-emerald-500 w-48 transition-colors"
+                  />
+                </div>
+                <select
+                  required
+                  value={referralForm.personel}
+                  onChange={(e) => setReferralForm({...referralForm, personel: e.target.value})}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                >
+                  <option value="">-- Choose Patient --</option>
+                  {filteredPatients.map(p => (
+                    <option key={p.id} value={`${p.fullname} (${p.id_number})`}>
+                      {p.fullname} ({p.id_number})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Destination Organization */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs text-slate-400 font-semibold">Target Organization *</label>
+                    <input 
+                      type="text" 
+                      placeholder="Search organization..." 
+                      value={orgQuery}
+                      onChange={e => setOrgQuery(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-lg py-1 px-2.5 text-xs text-slate-300 placeholder-slate-600 outline-none focus:border-emerald-500 w-32 transition-colors"
+                    />
+                  </div>
+                  <select
+                    required
+                    value={referralForm.organization_to}
+                    onChange={(e) => handleOrgChange(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                  >
+                    <option value="">-- Choose Organization --</option>
+                    {filteredOrgs.map(org => (
+                      <option key={org} value={org}>{org}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Target Department */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs text-slate-400 font-semibold">Department To *</label>
+                    <input 
+                      type="text" 
+                      placeholder="Search department..." 
+                      value={deptQuery}
+                      onChange={e => setDeptQuery(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-lg py-1 px-2.5 text-xs text-slate-300 placeholder-slate-600 outline-none focus:border-emerald-500 w-32 transition-colors"
+                    />
+                  </div>
+                  <select
+                    required
+                    value={referralForm.department_to}
+                    onChange={(e) => setReferralForm({...referralForm, department_to: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                  >
+                    {filteredDepts.map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Target Staff Member (Optional) */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs text-slate-400 font-semibold">Target Clinician / Staff member (Optional)</label>
+                  <input 
+                    type="text" 
+                    placeholder="Search staff by name..." 
+                    value={staffQuery}
+                    onChange={e => setStaffQuery(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-lg py-1 px-2.5 text-xs text-slate-300 placeholder-slate-600 outline-none focus:border-emerald-500 w-48 transition-colors"
+                  />
+                </div>
+                <select
+                  value={referralForm.staff_to}
+                  onChange={(e) => setReferralForm({...referralForm, staff_to: e.target.value})}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                >
+                  <option value="">-- Defaults to Organization Admin --</option>
+                  {filteredStaff.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.fullname} ({s.staff_role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Arrival Date */}
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-semibold">Estimated Arrival Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={referralForm.arrival_date}
+                    onChange={(e) => setReferralForm({...referralForm, arrival_date: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+
+                {/* Arrival Time */}
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-semibold">Estimated Arrival Time</label>
+                  <input
+                    type="time"
+                    value={referralForm.arrival_time}
+                    onChange={(e) => setReferralForm({...referralForm, arrival_time: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Referral Reason */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold">Reason for Referral *</label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="State the symptoms, diagnosis, or reason for transfer..."
+                  value={referralForm.reason}
+                  onChange={(e) => setReferralForm({...referralForm, reason: e.target.value})}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors resize-none"
+                />
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-4 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={closeReferralModal}
+                  className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={referralModalLoading}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  {referralModalLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+                  {referralModalLoading ? 'Creating Referral...' : 'Create Referral'}
                 </button>
               </div>
 
