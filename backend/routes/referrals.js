@@ -5,7 +5,7 @@ import protect from '../middleware/auth.js';
 const router = express.Router();
 
 // Get all registered organizations
-router.get('/organizations', protect, async (req, res) => {
+router.get('/organizations', async (req, res) => {
     try {
         const result = await pool.query(
             `SELECT DISTINCT organization 
@@ -22,7 +22,7 @@ router.get('/organizations', protect, async (req, res) => {
 });
 
 // Get clinical staff members of a specific organization (excluding CHWs)
-router.get('/organizations/:orgName/staff', protect, async (req, res) => {
+router.get('/organizations/:orgName/staff', async (req, res) => {
     const { orgName } = req.params;
     try {
         const result = await pool.query(

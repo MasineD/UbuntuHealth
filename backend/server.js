@@ -10,6 +10,7 @@ import patientsRoutes from './routes/patients.js';
 import chwsRoutes from './routes/chws.js';
 import staffRoutes from './routes/staff.js';
 import referralsRoutes from './routes/referrals.js';
+import appointmentsRoutes from './routes/appointments.js';
 import dotenv from 'dotenv'
 
 dotenv.config()
@@ -42,6 +43,7 @@ app.use('/api/auth', patientsRoutes);
 app.use('/api/auth', chwsRoutes);
 app.use('/api/auth', staffRoutes);
 app.use('/api/auth', referralsRoutes);
+app.use('/api/auth', appointmentsRoutes);
 
 // ========== SOCKET.IO CODE (ADD THIS) ==========
 // Store online users and their socket IDs

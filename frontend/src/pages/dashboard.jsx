@@ -70,6 +70,34 @@ function Dashboard({ user, onLogout, actionLoading }) {
   const [patients, setPatients] = useState([]);
   const [loadingPatients, setLoadingPatients] = useState(false);
 
+  // Appointments administrative state
+  const [appointments, setAppointments] = useState([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
+  const [appointmentGroup, setAppointmentGroup] = useState('our-patients'); // 'our-patients' | 'new-patients'
+
+  const fetchAppointments = async () => {
+    setLoadingAppointments(true);
+    try {
+      const response = await api.get('/auth/appointments');
+      if (response.data && response.data.appointments) {
+        setAppointments(response.data.appointments);
+      }
+    } catch (err) {
+      console.error('Error fetching appointments:', err);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  };
+
+  const handleUpdateAppointmentStatus = async (appId, status) => {
+    try {
+      await api.put(`/auth/appointments/${appId}/status`, { status });
+      fetchAppointments();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update appointment status');
+    }
+  };
+
   const fetchPatients = async () => {
     setLoadingPatients(true);
     try {
@@ -539,6 +567,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
     fetchReferrals();
     fetchOrganizations();
     fetchOrganizationPatients();
+    fetchAppointments();
   }, []);
 
   // Modal State
@@ -1160,48 +1189,166 @@ function Dashboard({ user, onLogout, actionLoading }) {
 
           {/* ================= PAGE: APPOINTMENTS ================= */}
           {activeTab === 'appointments' && (
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-                <div className="space-y-0.5">
-                  <h3 className="font-bold text-slate-200">Appointments List</h3>
-                  <p className="text-slate-500 text-xs">Calendar schedule of appointments</p>
+            <div className="space-y-6">
+              
+              {/* Group Toggle buttons */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="flex bg-slate-950/80 p-1 rounded-xl border border-slate-850">
+                  <button
+                    onClick={() => setAppointmentGroup('our-patients')}
+                    className={`py-1.5 px-4 rounded-lg font-bold text-xs transition-all duration-300 ${
+                      appointmentGroup !== 'new-patients'
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/10'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/20'
+                    }`}
+                  >
+                    From Our Patients ({appointments.filter(app => app.is_our_patient === true).length})
+                  </button>
+                  <button
+                    onClick={() => setAppointmentGroup('new-patients')}
+                    className={`py-1.5 px-4 rounded-lg font-bold text-xs transition-all duration-300 ${
+                      appointmentGroup === 'new-patients'
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/10'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/20'
+                    }`}
+                  >
+                    From New Patients ({appointments.filter(app => app.is_our_patient !== true).length})
+                  </button>
                 </div>
-                <button className="py-2 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors">
-                  <Plus className="h-4 w-4" /> Schedule Visit
-                </button>
+                
+                <p className="text-slate-500 text-xs font-medium">
+                  Showing incoming requests scheduled to {user.organization}
+                </p>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-800 text-slate-400 text-xs">
-                      <th className="py-3 px-4">Patient</th>
-                      <th className="py-3 px-4">Consultation Type</th>
-                      <th className="py-3 px-4">Clinician / Doctor</th>
-                      <th className="py-3 px-4">Date & Time</th>
-                      <th className="py-3 px-4">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/80">
-                    {appointmentsList.map((app) => (
-                      <tr key={app.id} className="hover:bg-slate-800/20 transition-colors">
-                        <td className="py-3.5 px-4 font-bold text-slate-200">{app.patient}</td>
-                        <td className="py-3.5 px-4 text-slate-300">{app.type}</td>
-                        <td className="py-3.5 px-4 text-slate-400">{app.doctor}</td>
-                        <td className="py-3.5 px-4 font-mono text-xs text-slate-300">
-                          {app.date} <span className="text-slate-500">at {app.time}</span>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                            app.status === 'Upcoming' ? 'bg-sky-500/10 text-sky-400' : 'bg-emerald-500/10 text-emerald-400'
-                          }`}>
-                            {app.status}
-                          </span>
-                        </td>
+              {/* Appointments List Panel */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                  <div>
+                    <h3 className="font-bold text-slate-200 text-base">
+                      {appointmentGroup === 'new-patients' ? 'External / New Patient Bookings' : 'Registered Patient Bookings'}
+                    </h3>
+                    <p className="text-slate-500 text-xs mt-1">
+                      {appointmentGroup === 'new-patients' 
+                        ? 'Requests from unregistered users or patients registered in other organizations.' 
+                        : 'Requests from patients registered under your organization.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
+                        <th className="py-3 px-4">Patient Details</th>
+                        <th className="py-3 px-4">Department & Clinician</th>
+                        <th className="py-3 px-4">Scheduled Date</th>
+                        <th className="py-3 px-4">Reason for Visit</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-center">Status Action</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/80">
+                      {loadingAppointments ? (
+                        <tr>
+                          <td colSpan="6" className="py-8 text-center text-slate-500">
+                            <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-400" />
+                            Loading appointments...
+                          </td>
+                        </tr>
+                      ) : (
+                        (appointmentGroup === 'new-patients' 
+                          ? appointments.filter(app => app.is_our_patient !== true) 
+                          : appointments.filter(app => app.is_our_patient === true)
+                        ).length === 0 ? (
+                          <tr>
+                            <td colSpan="6" className="py-8 text-center text-slate-500 text-xs">
+                              No appointments found in this group.
+                            </td>
+                          </tr>
+                        ) : (
+                          (appointmentGroup === 'new-patients' 
+                            ? appointments.filter(app => app.is_our_patient !== true) 
+                            : appointments.filter(app => app.is_our_patient === true)
+                          ).map((app) => {
+                            const isStaffAssigned = !!app.staff_to;
+                            let statusColor = 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
+                            if (app.status === 'approved') statusColor = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+                            if (app.status === 'rejected') statusColor = 'bg-red-500/10 text-red-400 border border-red-500/20';
+                            if (app.status === 'attended') statusColor = 'bg-sky-500/10 text-sky-400 border border-sky-500/20';
+                            
+                            return (
+                              <tr key={app.id} className="hover:bg-slate-800/20 transition-colors">
+                                <td className="py-3.5 px-4">
+                                  <span className="block font-bold text-slate-200">{app.fullname}</span>
+                                  <span className="block text-slate-500 text-xs mt-0.5">{app.phone_number || 'No contact phone'}</span>
+                                </td>
+                                <td className="py-3.5 px-4 text-xs">
+                                  <span className="block text-slate-300 font-semibold">{app.department_to}</span>
+                                  <span className="block text-slate-500 mt-0.5">
+                                    Recipient: {isStaffAssigned ? app.staff_to : 'Organization Admin (You)'}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 font-mono text-xs text-slate-300">
+                                  {app.arrival_date ? app.arrival_date.split('T')[0] : 'N/A'}
+                                  <span className="block text-slate-500 mt-0.5">at {app.arrival_time || 'anytime'}</span>
+                                </td>
+                                <td className="py-3.5 px-4 text-xs text-slate-400 max-w-xs truncate" title={app.reason}>
+                                  {app.reason}
+                                </td>
+                                <td className="py-3.5 px-4">
+                                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusColor}`}>
+                                    {app.status}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-center">
+                                  {isStaffAssigned ? (
+                                    <span className="text-[10px] text-slate-500 italic block max-w-[150px] mx-auto leading-tight">
+                                      Clinician Assigned: Only recipient can update status
+                                    </span>
+                                  ) : (
+                                    <div className="flex gap-2 justify-center items-center">
+                                      {app.status === 'pending approval' && (
+                                        <button
+                                          onClick={() => handleUpdateAppointmentStatus(app.id, 'approved')}
+                                          className="py-1 px-2.5 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-slate-950 border border-emerald-500/25 rounded text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                        >
+                                          Approve
+                                        </button>
+                                      )}
+                                      
+                                      {app.status === 'approved' && (
+                                        <button
+                                          onClick={() => handleUpdateAppointmentStatus(app.id, 'attended')}
+                                          className="py-1 px-2.5 bg-sky-500/10 hover:bg-sky-500 text-sky-400 hover:text-slate-950 border border-sky-500/25 rounded text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                        >
+                                          Attended
+                                        </button>
+                                      )}
+
+                                      {(app.status === 'pending approval' || app.status === 'approved') && (
+                                        <button
+                                          onClick={() => handleUpdateAppointmentStatus(app.id, 'rejected')}
+                                          className="py-1 px-2.5 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-slate-950 border border-red-500/25 rounded text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                        >
+                                          Reject
+                                        </button>
+                                      )}
+
+                                      {(app.status === 'attended' || app.status === 'rejected') && (
+                                        <span className="text-slate-500 text-[10px] italic">No actions available</span>
+                                      )}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
