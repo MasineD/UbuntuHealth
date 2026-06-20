@@ -24,6 +24,13 @@ const protect = async (req, res, next) => {   //Defines an asynchronous middlewa
                 return res.status(401).json({ message: 'Not authorized, user not found' });
             }
             user = result.rows[0];
+        } else if (decoded.role === 'staff') {
+            const result = await pool.query('SELECT id, employee_id, fullname as name, fullname, email, id_number, gender, phone_number, role as staff_role, \'staff\' as role FROM users.clinical_staff WHERE id = $1',
+                [decoded.id]);
+            if (result.rows.length === 0) {
+                return res.status(401).json({ message: 'Not authorized, user not found' });
+            }
+            user = result.rows[0];
         } else {
             const result = await pool.query('SELECT id, fullname as name, fullname, email, organization, facility_code, \'admin\' as role FROM users.admins WHERE id = $1',
                 [decoded.id]);
