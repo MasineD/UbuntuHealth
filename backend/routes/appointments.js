@@ -2,6 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import pool from '../config/database.js';
 import protect from '../middleware/auth.js';
+import crypto from 'crypto';
 
 const router = express.Router();
 
@@ -50,6 +51,12 @@ router.post('/appointments', async (req, res) => {
             return res.status(400).json({ message: 'Full name is required for booking' });
         }
 
+        // Generate unique alphanumeric key if registered patient
+        let appointmentKey = null;
+        if (patientId) {
+            appointmentKey = crypto.randomBytes(4).toString('hex').toUpperCase();
+        }
+
         // Enforce: An appointment cannot be made to a CHW
         if (staff_to) {
             const isChw = await pool.query(
@@ -63,8 +70,8 @@ router.post('/appointments', async (req, res) => {
 
         const newApp = await pool.query(
             `INSERT INTO tasks.appointments (
-                fullname, organization_to, department_to, staff_to, reason, arrival_date, arrival_time, phone_number, status, patient_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
+                fullname, organization_to, department_to, staff_to, reason, arrival_date, arrival_time, phone_number, status, patient_id, appointment_key
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
             RETURNING *`,
             [
                 finalFullname,
@@ -76,7 +83,8 @@ router.post('/appointments', async (req, res) => {
                 arrival_time || null,
                 finalPhone || null,
                 'pending approval',
-                patientId
+                patientId,
+                appointmentKey
             ]
         );
 
@@ -154,6 +162,17 @@ router.put('/appointments/:id/status', protect, async (req, res) => {
         }
 
         const appointment = appRes.rows[0];
+
+        // If status is 'attended' and the appointment has an appointment_key generated, verify it
+        if (status === 'attended' && appointment.appointment_key) {
+            const clientKey = req.body.key || req.body.appointment_key;
+            if (!clientKey) {
+                return res.status(400).json({ message: 'Appointment key is required to mark it as attended' });
+            }
+            if (clientKey.toString().toUpperCase() !== appointment.appointment_key.toString().toUpperCase()) {
+                return res.status(400).json({ message: 'Invalid appointment key' });
+            }
+        }
 
         // Authorization check
         let isAuthorized = false;
