@@ -295,6 +295,9 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
     release_date: ''
   });
   const [routines, setRoutines] = useState([]);
+  const [isEditingHealthRecord, setIsEditingHealthRecord] = useState(false);
+  const [verifyIdNumber, setVerifyIdNumber] = useState('');
+  const [dbOnTreatment, setDbOnTreatment] = useState(false);
   const [savingHealthRecord, setSavingHealthRecord] = useState(false);
   const [healthRecordError, setHealthRecordError] = useState('');
   const [healthRecordSuccess, setHealthRecordSuccess] = useState('');
@@ -369,6 +372,9 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
     setIsHealthRecordModalOpen(true);
     setHealthRecordError('');
     setHealthRecordSuccess('');
+    setIsEditingHealthRecord(false);
+    setVerifyIdNumber('');
+    setDbOnTreatment(false);
     
     // Set default empty state first
     setHealthRecord({
@@ -386,11 +392,13 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
       release_date: ''
     });
     setRoutines([]);
-
+ 
     try {
       const response = await api.get(`/auth/patients/${patient.id}/health-record`);
       if (response.data) {
         const hr = response.data.healthRecord || {};
+        const onTreatmentVal = hr.on_treatment || false;
+        setDbOnTreatment(onTreatmentVal);
         setHealthRecord({
           blood_type: hr.blood_type || '',
           blood_pressure: hr.blood_pressure || '',
@@ -398,7 +406,7 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
           height: hr.height || '',
           sugar_level: hr.sugar_level || '',
           diagnosis: hr.diagnosis || '',
-          on_treatment: hr.on_treatment || false,
+          on_treatment: onTreatmentVal,
           morning_time: hr.morning_time || '',
           midday_time: hr.midday_time || '',
           evening_time: hr.evening_time || '',
@@ -460,10 +468,18 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
     setHealthRecordError('');
     setHealthRecordSuccess('');
 
+    // Verify patient identity number
+    if (!verifyIdNumber || verifyIdNumber.trim() !== selectedPatient.id_number.trim()) {
+      setHealthRecordError("Identity verification failed. The entered ID number does not match the patient's record.");
+      setSavingHealthRecord(false);
+      return;
+    }
+
     try {
       const payload = {
         ...healthRecord,
-        routines
+        routines,
+        patient_id_number: verifyIdNumber.trim()
       };
       await api.put(`/auth/patients/${selectedPatient.id}/health-record`, payload);
       setHealthRecordSuccess('Health record and routines updated successfully!');
@@ -471,6 +487,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
       setTimeout(() => {
         setIsHealthRecordModalOpen(false);
         setSelectedPatient(null);
+        setIsEditingHealthRecord(false);
+        setVerifyIdNumber('');
       }, 1500);
     } catch (err) {
       console.error('Error updating health record:', err);
@@ -910,7 +928,6 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                       <th className="py-3 px-4">Gender & Age</th>
                       <th className="py-3 px-4">Contact Info</th>
                       <th className="py-3 px-4">Address Details</th>
-                      <th className="py-3 px-4">National ID</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80">
@@ -962,7 +979,6 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                             <td className="py-3.5 px-4 text-slate-400">
                               {pt.house_number} {pt.surbub}, {pt.city}
                             </td>
-                            <td className="py-3.5 px-4 font-mono text-xs text-slate-550">{pt.id_number}</td>
                           </tr>
                         ))
                     )}
@@ -1207,7 +1223,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                       placeholder="e.g. O+"
                       value={healthRecord.blood_type}
                       onChange={(e) => setHealthRecord({...healthRecord, blood_type: e.target.value})}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors"
+                      disabled={!isEditingHealthRecord}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors disabled:opacity-60"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1218,7 +1235,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                       placeholder="mmHg"
                       value={healthRecord.blood_pressure}
                       onChange={(e) => setHealthRecord({...healthRecord, blood_pressure: e.target.value})}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                      disabled={!isEditingHealthRecord}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono disabled:opacity-60"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1229,7 +1247,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                       placeholder="mmol/L"
                       value={healthRecord.sugar_level}
                       onChange={(e) => setHealthRecord({...healthRecord, sugar_level: e.target.value})}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                      disabled={!isEditingHealthRecord}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono disabled:opacity-60"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1240,7 +1259,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                       placeholder="kg"
                       value={healthRecord.weight}
                       onChange={(e) => setHealthRecord({...healthRecord, weight: e.target.value})}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                      disabled={!isEditingHealthRecord}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono disabled:opacity-60"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1251,7 +1271,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                       placeholder="cm"
                       value={healthRecord.height}
                       onChange={(e) => setHealthRecord({...healthRecord, height: e.target.value})}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                      disabled={!isEditingHealthRecord}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono disabled:opacity-60"
                     />
                   </div>
                 </div>
@@ -1265,7 +1286,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                   placeholder="Record primary symptoms, diagnoses, or notes..."
                   value={healthRecord.diagnosis}
                   onChange={(e) => setHealthRecord({...healthRecord, diagnosis: e.target.value})}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors resize-none"
+                  disabled={!isEditingHealthRecord}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors resize-none disabled:opacity-60"
                 />
               </div>
 
@@ -1278,7 +1300,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                       type="checkbox"
                       checked={healthRecord.on_treatment}
                       onChange={(e) => setHealthRecord({...healthRecord, on_treatment: e.target.checked})}
-                      className="h-4 w-4 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-950"
+                      disabled={!isEditingHealthRecord || healthRecord.on_treatment === true}
+                      className="h-4 w-4 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-950 disabled:opacity-60"
                     />
                     Patient is on active treatment
                   </label>
@@ -1292,7 +1315,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                         type="time"
                         value={healthRecord.morning_time}
                         onChange={(e) => setHealthRecord({...healthRecord, morning_time: e.target.value})}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                        disabled={!isEditingHealthRecord}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors disabled:opacity-60"
                       />
                     </div>
                     <div className="space-y-1">
@@ -1301,7 +1325,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                         type="time"
                         value={healthRecord.midday_time}
                         onChange={(e) => setHealthRecord({...healthRecord, midday_time: e.target.value})}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                        disabled={!isEditingHealthRecord}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors disabled:opacity-60"
                       />
                     </div>
                     <div className="space-y-1">
@@ -1310,7 +1335,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                         type="time"
                         value={healthRecord.evening_time}
                         onChange={(e) => setHealthRecord({...healthRecord, evening_time: e.target.value})}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                        disabled={!isEditingHealthRecord}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors disabled:opacity-60"
                       />
                     </div>
                   </div>
@@ -1321,41 +1347,46 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
               <div className="space-y-4 pt-2">
                 <div className="flex justify-between items-center">
                   <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Scheduled Routines</h3>
-                  <button
-                    type="button"
-                    onClick={handleAddRoutine}
-                    className="py-1.5 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-500/20 flex items-center gap-1 transition-colors"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Add Routine
-                  </button>
+                  {isEditingHealthRecord && (
+                    <button
+                      type="button"
+                      onClick={handleAddRoutine}
+                      className="py-1.5 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-500/20 flex items-center gap-1 transition-colors"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Add Routine
+                    </button>
+                  )}
                 </div>
 
                 <div className="space-y-3.5 max-h-56 overflow-y-auto pr-1">
                   {routines.length === 0 ? (
                     <div className="text-center py-6 border border-dashed border-slate-800 rounded-2xl text-slate-500 text-xs">
-                      No routines configured. Click "Add Routine" to set up care schedules.
+                      No routines configured. {isEditingHealthRecord && 'Click "Add Routine" to set up care schedules.'}
                     </div>
                   ) : (
                     routines.map((routine, idx) => (
                       <div key={idx} className="bg-slate-950/40 border border-slate-800 rounded-2xl p-4 space-y-3 relative group">
                         
                         {/* Remove button */}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveRoutine(idx)}
-                          className="absolute top-4 right-4 text-slate-500 hover:text-red-400 transition-colors"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {isEditingHealthRecord && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveRoutine(idx)}
+                            className="absolute top-4 right-4 text-slate-500 hover:text-red-400 transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
 
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                           {/* Description */}
                           <div className="md:col-span-4 space-y-1">
                             <label className="text-[10px] text-slate-500 font-semibold uppercase">Routine Type</label>
                             <select
-                              value={routine.description || 'Doctor visit / checkup'}
+                              value={routine.description || 'Doctor visit/ checkup'}
                               onChange={(e) => handleRoutineChange(idx, 'description', e.target.value)}
-                              className="bg-slate-900 border border-slate-850 rounded-xl py-1.5 px-3 w-full text-slate-200 outline-none text-xs"
+                              disabled={!isEditingHealthRecord}
+                              className="bg-slate-900 border border-slate-850 rounded-xl py-1.5 px-3 w-full text-slate-200 outline-none text-xs disabled:opacity-60"
                             >
                               <option value="Doctor visit/ checkup">Doctor visit / checkup</option>
                               <option value="medicine refill">Medicine refill</option>
@@ -1369,7 +1400,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                               type="time"
                               value={routine.time || '08:00'}
                               onChange={(e) => handleRoutineChange(idx, 'time', e.target.value)}
-                              className="bg-slate-900 border border-slate-855 rounded-xl py-1.5 px-3 w-full text-slate-200 outline-none font-mono text-xs"
+                              disabled={!isEditingHealthRecord}
+                              className="bg-slate-900 border border-slate-855 rounded-xl py-1.5 px-3 w-full text-slate-200 outline-none font-mono text-xs disabled:opacity-60"
                             />
                           </div>
 
@@ -1380,7 +1412,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                                 type="checkbox"
                                 checked={routine.weekly}
                                 onChange={(e) => handleRoutineChange(idx, 'weekly', e.target.checked)}
-                                className="h-4 w-4 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-900"
+                                disabled={!isEditingHealthRecord}
+                                className="h-4 w-4 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-900 disabled:opacity-60"
                               />
                               Weekly
                             </label>
@@ -1389,7 +1422,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                                 type="checkbox"
                                 checked={routine.monthly}
                                 onChange={(e) => handleRoutineChange(idx, 'monthly', e.target.checked)}
-                                className="h-4 w-4 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-900"
+                                disabled={!isEditingHealthRecord}
+                                className="h-4 w-4 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-900 disabled:opacity-60"
                               />
                               Monthly
                             </label>
@@ -1402,7 +1436,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                                 type="checkbox"
                                 checked={routine.status}
                                 onChange={(e) => handleRoutineChange(idx, 'status', e.target.checked)}
-                                className="h-4 w-4 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-900"
+                                disabled={!isEditingHealthRecord}
+                                className="h-4 w-4 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-900 disabled:opacity-60"
                               />
                               Attended
                             </label>
@@ -1417,7 +1452,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                               <select
                                 value={routine.weekday || 'Monday'}
                                 onChange={(e) => handleRoutineChange(idx, 'weekday', e.target.value)}
-                                className="bg-slate-900 border border-slate-850 rounded-xl py-1.5 px-3 w-full text-slate-200 outline-none"
+                                disabled={!isEditingHealthRecord}
+                                className="bg-slate-900 border border-slate-850 rounded-xl py-1.5 px-3 w-full text-slate-200 outline-none disabled:opacity-60"
                               >
                                 {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => (
                                   <option key={d} value={d}>{d}</option>
@@ -1434,7 +1470,8 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                                 max={31}
                                 value={routine.day_of_month || 1}
                                 onChange={(e) => handleRoutineChange(idx, 'day_of_month', parseInt(e.target.value, 10))}
-                                className="bg-slate-900 border border-slate-850 rounded-xl py-1.5 px-3 w-full text-slate-200 outline-none font-mono"
+                                disabled={!isEditingHealthRecord}
+                                className="bg-slate-900 border border-slate-850 rounded-xl py-1.5 px-3 w-full text-slate-200 outline-none font-mono disabled:opacity-60"
                               />
                             </div>
                           )}
@@ -1446,23 +1483,66 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                 </div>
               </div>
 
+              {/* Patient Identity verification input field (required when editing) */}
+              {isEditingHealthRecord && (
+                <div className="bg-slate-950/60 p-4 border border-slate-800 rounded-2xl space-y-2 animate-fadeIn">
+                  <label className="text-xs text-slate-350 font-semibold block">
+                    Verify Patient Identity to Save Changes
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter Patient's 13-digit ID Number"
+                    value={verifyIdNumber}
+                    onChange={(e) => setVerifyIdNumber(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-4 text-sm text-slate-100 placeholder-slate-600 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    required
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    You must enter the patient's registered identity number to verify and authorize this modification.
+                  </p>
+                </div>
+              )}
+
               {/* Action buttons */}
               <div className="flex gap-4 pt-4 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => { setIsHealthRecordModalOpen(false); setSelectedPatient(null); setHealthRecordError(''); setHealthRecordSuccess(''); }}
-                  className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingHealthRecord}
-                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
-                >
-                  {savingHealthRecord && <Loader2 className="h-5 w-5 animate-spin" />}
-                  {savingHealthRecord ? 'Saving Record...' : 'Save Health Record'}
-                </button>
+                {!isEditingHealthRecord ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => { setIsHealthRecordModalOpen(false); setSelectedPatient(null); }}
+                      className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
+                    >
+                      Close Profile
+                    </button>
+                    {user.staff_role === 'doctor/nurse' && (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingHealthRecord(true)}
+                        className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all"
+                      >
+                        Edit Health Record
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => { setIsEditingHealthRecord(false); setVerifyIdNumber(''); }}
+                      className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingHealthRecord}
+                      className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+                    >
+                      {savingHealthRecord && <Loader2 className="h-5 w-5 animate-spin" />}
+                      {savingHealthRecord ? 'Saving Record...' : 'Save Health Record'}
+                    </button>
+                  </>
+                )}
               </div>
 
             </form>
