@@ -13,10 +13,71 @@ const api = axios.create({
   }
 });
 
-function Dashboard({ user, onLogout, actionLoading }) {
+function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'patients' | 'appointments' | 'referrals' | 'chat'
   const [searchQuery, setSearchQuery] = useState('');
   const [staffSearchQuery, setStaffSearchQuery] = useState('');
+
+  // Profile Modal State
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileData, setProfileData] = useState(null);
+  const [profileForm, setProfileForm] = useState({ fullname: '', phone_number: '', email: '' });
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState('');
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  const fetchProfile = async () => {
+    setProfileLoading(true);
+    setProfileError('');
+    try {
+      const res = await api.get('/auth/profile');
+      if (res.data && res.data.profile) {
+        setProfileData(res.data.profile);
+        setProfileForm({
+          fullname: res.data.profile.fullname || '',
+          phone_number: res.data.profile.phone_number || '',
+          email: res.data.profile.email || ''
+        });
+      }
+    } catch (err) {
+      setProfileError(err.response?.data?.message || 'Failed to load profile details');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isProfileModalOpen) {
+      fetchProfile();
+      setIsEditingProfile(false);
+      setProfileSuccess('');
+      setProfileError('');
+    }
+  }, [isProfileModalOpen]);
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setProfileSaving(true);
+    setProfileError('');
+    setProfileSuccess('');
+    try {
+      const res = await api.put('/auth/profile', profileForm);
+      if (res.data && res.data.profile) {
+        setProfileData(res.data.profile);
+        setProfileSuccess('Profile updated successfully!');
+        setIsEditingProfile(false);
+        if (onUserUpdate && res.data.user) {
+          onUserUpdate(res.data.user);
+        }
+      }
+    } catch (err) {
+      setProfileError(err.response?.data?.message || 'Failed to save profile changes');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
   
   // Socket & Notifications state
   const [socket, setSocket] = useState(null);
@@ -802,6 +863,12 @@ function Dashboard({ user, onLogout, actionLoading }) {
                 <span className="inline-block bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
                   {user.organization} Admin
                 </span>
+                <button
+                  onClick={() => setIsProfileModalOpen(true)}
+                  className="mt-1.5 text-xs text-emerald-400 hover:text-emerald-300 font-semibold underline block text-left transition-colors duration-200"
+                >
+                  View Profile
+                </button>
               </div>
             </div>
           </div>
@@ -2421,6 +2488,156 @@ function Dashboard({ user, onLogout, actionLoading }) {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ================= PROFILE MODAL ================= */}
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => setIsProfileModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <h2 className="text-xl font-bold text-white">Admin Profile</h2>
+              <p className="text-slate-400 text-xs mt-1">Manage and view your user profile details.</p>
+            </div>
+
+            {profileLoading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 text-emerald-500 animate-spin mb-2" />
+                <p className="text-xs text-slate-400">Loading profile details...</p>
+              </div>
+            ) : profileError ? (
+              <div className="p-4 bg-red-950/30 border border-red-500/20 rounded-2xl flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-sm font-bold text-red-200">Error</h4>
+                  <p className="text-xs text-red-400 mt-1">{profileError}</p>
+                  <button 
+                    type="button"
+                    onClick={fetchProfile}
+                    className="mt-2 text-xs font-semibold text-emerald-400 hover:underline"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveProfile} className="space-y-6">
+                {profileSuccess && (
+                  <div className="p-4 bg-emerald-950/30 border border-emerald-500/20 rounded-2xl flex items-center gap-3">
+                    <CheckCircle className="h-5 w-5 text-emerald-400 shrink-0" />
+                    <p className="text-xs text-emerald-300 font-semibold">{profileSuccess}</p>
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Full Name</label>
+                    <input
+                      type="text"
+                      required
+                      disabled={!isEditingProfile}
+                      value={profileForm.fullname}
+                      onChange={(e) => setProfileForm({ ...profileForm, fullname: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-medium transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Phone Number</label>
+                    <input
+                      type="text"
+                      required
+                      disabled={!isEditingProfile}
+                      value={profileForm.phone_number}
+                      onChange={(e) => setProfileForm({ ...profileForm, phone_number: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-mono transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      required
+                      disabled={!isEditingProfile}
+                      value={profileForm.email}
+                      onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-800/80">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block font-semibold uppercase mb-1">Identity Number (Uneditable)</span>
+                      <div className="bg-slate-950/60 border border-slate-800/50 rounded-xl px-4 py-2.5 text-sm text-slate-400 font-mono select-none">
+                        {profileData?.identity || '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block font-semibold uppercase mb-1">Organization (Uneditable)</span>
+                      <div className="bg-slate-950/60 border border-slate-800/50 rounded-xl px-4 py-2.5 text-sm text-slate-400 font-medium select-none">
+                        {profileData?.organization || '—'}
+                      </div>
+                    </div>
+                    <div className="md:col-span-2">
+                      <span className="text-[10px] text-slate-550 block font-semibold uppercase mb-1">Facility Code (Uneditable)</span>
+                      <div className="bg-slate-950/60 border border-slate-800/50 rounded-xl px-4 py-2.5 text-sm text-slate-400 font-mono select-none">
+                        {profileData?.facility_code || '—'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+                  {isEditingProfile ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditingProfile(false);
+                          setProfileForm({
+                            fullname: profileData?.fullname || '',
+                            phone_number: profileData?.phone_number || '',
+                            email: profileData?.email || ''
+                          });
+                          setProfileError('');
+                          setProfileSuccess('');
+                        }}
+                        className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition-all duration-300"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={profileSaving}
+                        className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-sm transition-all duration-300 flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20"
+                      >
+                        {profileSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Save Changes
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingProfile(true)}
+                      className="px-6 py-2.5 bg-slate-850 border border-slate-700/60 hover:bg-slate-800 text-emerald-400 font-bold rounded-xl text-sm transition-all duration-300"
+                    >
+                      Edit Profile
+                    </button>
+                  )}
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

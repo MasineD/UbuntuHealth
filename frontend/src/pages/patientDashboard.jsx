@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { LayoutDashboard, FileText, Clock, Phone, LogOut, Loader2,ShieldCheck,Bell,CheckCircle,User as UserIcon,Activity,Heart,ChevronRight, Calendar, CalendarDays, Plus, MessageSquare, Send
-} from 'lucide-react';
+import { LayoutDashboard, FileText, Clock, Phone, LogOut, Loader2,ShieldCheck,Bell,CheckCircle,User as UserIcon,Activity,Heart,ChevronRight, Calendar, CalendarDays, Plus, MessageSquare, Send, X, AlertTriangle } from 'lucide-react';
 import { io } from 'socket.io-client';
 import ChatRoom from '../components/ChatRoom';
 
@@ -13,10 +12,91 @@ const api = axios.create({
   }
 });
 
-function PatientDashboard({ user, onLogout, actionLoading }) {
+function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'records' | 'routines' | 'contacts' | 'referrals' | 'appointments'
   const [referralsList, setReferralsList] = useState([]);
   const [loadingReferrals, setLoadingReferrals] = useState(false);
+
+  // Profile Modal State
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileData, setProfileData] = useState(null);
+  const [profileForm, setProfileForm] = useState({
+    fullname: '',
+    gender: '',
+    email: '',
+    phone_number: '',
+    house_number: '',
+    surbub: '',
+    municipality: '',
+    city: '',
+    next_of_kin_fullname: '',
+    next_of_kin_email: '',
+    next_of_kin_phone: ''
+  });
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState('');
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  const fetchProfile = async () => {
+    setProfileLoading(true);
+    setProfileError('');
+    try {
+      const res = await api.get('/auth/profile');
+      if (res.data && res.data.profile) {
+        setProfileData(res.data.profile);
+        setProfileForm({
+          fullname: res.data.profile.fullname || '',
+          gender: res.data.profile.gender || '',
+          email: res.data.profile.email || '',
+          phone_number: res.data.profile.phone_number || '',
+          house_number: res.data.profile.house_number || '',
+          surbub: res.data.profile.surbub || '',
+          municipality: res.data.profile.municipality || '',
+          city: res.data.profile.city || '',
+          next_of_kin_fullname: res.data.profile.next_of_kin_fullname || '',
+          next_of_kin_email: res.data.profile.next_of_kin_email || '',
+          next_of_kin_phone: res.data.profile.next_of_kin_phone || ''
+        });
+      }
+    } catch (err) {
+      setProfileError(err.response?.data?.message || 'Failed to load profile details');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isProfileModalOpen) {
+      fetchProfile();
+      setIsEditingProfile(false);
+      setProfileSuccess('');
+      setProfileError('');
+    }
+  }, [isProfileModalOpen]);
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setProfileSaving(true);
+    setProfileError('');
+    setProfileSuccess('');
+    try {
+      const res = await api.put('/auth/profile', profileForm);
+      if (res.data && res.data.profile) {
+        setProfileData(res.data.profile);
+        setProfileSuccess('Profile updated successfully!');
+        setIsEditingProfile(false);
+        if (onUserUpdate && res.data.user) {
+          onUserUpdate(res.data.user);
+        }
+      }
+    } catch (err) {
+      setProfileError(err.response?.data?.message || 'Failed to save profile changes');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   // Socket & Notifications state
   const [socket, setSocket] = useState(null);
@@ -333,6 +413,12 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
                 <span className="inline-block bg-teal-500/10 text-teal-400 border border-teal-500/20 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
                   Patient
                 </span>
+                <button
+                  onClick={() => setIsProfileModalOpen(true)}
+                  className="mt-1.5 text-xs text-teal-400 hover:text-teal-300 font-semibold underline block text-left transition-colors duration-200"
+                >
+                  View Profile
+                </button>
               </div>
             </div>
             {/* ID Number display */}
@@ -882,6 +968,270 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
         </section>
       </main>
 
+      {/* ================= PROFILE MODAL ================= */}
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => setIsProfileModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <h2 className="text-xl font-bold text-white">Profile Details</h2>
+              <p className="text-slate-400 text-xs mt-1">Manage and view your user profile details.</p>
+            </div>
+
+            {profileLoading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 text-teal-500 animate-spin mb-2" />
+                <p className="text-xs text-slate-400">Loading profile details...</p>
+              </div>
+            ) : profileError ? (
+              <div className="p-4 bg-red-950/30 border border-red-500/20 rounded-2xl flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-sm font-bold text-red-200">Error</h4>
+                  <p className="text-xs text-red-400 mt-1">{profileError}</p>
+                  <button 
+                    type="button"
+                    onClick={fetchProfile}
+                    className="mt-2 text-xs font-semibold text-teal-400 hover:underline"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveProfile} className="space-y-6">
+                {profileSuccess && (
+                  <div className="p-4 bg-teal-950/30 border border-teal-500/20 rounded-2xl flex items-center gap-3">
+                    <CheckCircle className="h-5 w-5 text-teal-400 shrink-0" />
+                    <p className="text-xs text-teal-300 font-semibold">{profileSuccess}</p>
+                  </div>
+                )}
+
+                <div className="space-y-6">
+                  {/* Personal Information */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-semibold text-teal-400 uppercase tracking-wider">Personal Information</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Full Name</label>
+                        <input
+                          type="text"
+                          required
+                          disabled={!isEditingProfile}
+                          value={profileForm.fullname}
+                          onChange={(e) => setProfileForm({ ...profileForm, fullname: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-medium transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Gender</label>
+                        <select
+                          required
+                          disabled={!isEditingProfile}
+                          value={profileForm.gender}
+                          onChange={(e) => setProfileForm({ ...profileForm, gender: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-medium transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                        >
+                          <option value="">Select Gender</option>
+                          <option value="Male">Male</option>
+                          <option value="Female">Female</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contact & Address */}
+                  <div className="space-y-4 pt-4 border-t border-slate-800/80">
+                    <h3 className="text-xs font-semibold text-teal-400 uppercase tracking-wider">Contact & Address</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Email Address</label>
+                        <input
+                          type="email"
+                          disabled={!isEditingProfile}
+                          value={profileForm.email}
+                          onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Phone Number</label>
+                        <input
+                          type="text"
+                          required
+                          disabled={!isEditingProfile}
+                          value={profileForm.phone_number}
+                          onChange={(e) => setProfileForm({ ...profileForm, phone_number: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-mono transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">House Number</label>
+                        <input
+                          type="text"
+                          disabled={!isEditingProfile}
+                          value={profileForm.house_number}
+                          onChange={(e) => setProfileForm({ ...profileForm, house_number: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Suburb</label>
+                        <input
+                          type="text"
+                          disabled={!isEditingProfile}
+                          value={profileForm.surbub}
+                          onChange={(e) => setProfileForm({ ...profileForm, surbub: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Municipality</label>
+                        <input
+                          type="text"
+                          disabled={!isEditingProfile}
+                          value={profileForm.municipality}
+                          onChange={(e) => setProfileForm({ ...profileForm, municipality: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">City</label>
+                        <input
+                          type="text"
+                          disabled={!isEditingProfile}
+                          value={profileForm.city}
+                          onChange={(e) => setProfileForm({ ...profileForm, city: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Next of Kin */}
+                  <div className="space-y-4 pt-4 border-t border-slate-800/80">
+                    <h3 className="text-xs font-semibold text-teal-400 uppercase tracking-wider">Next of Kin details</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Next of Kin Full Name</label>
+                        <input
+                          type="text"
+                          required
+                          disabled={!isEditingProfile}
+                          value={profileForm.next_of_kin_fullname}
+                          onChange={(e) => setProfileForm({ ...profileForm, next_of_kin_fullname: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-medium transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Next of Kin Phone</label>
+                        <input
+                          type="text"
+                          required
+                          disabled={!isEditingProfile}
+                          value={profileForm.next_of_kin_phone}
+                          onChange={(e) => setProfileForm({ ...profileForm, next_of_kin_phone: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-mono transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Next of Kin Email</label>
+                        <input
+                          type="email"
+                          disabled={!isEditingProfile}
+                          value={profileForm.next_of_kin_email}
+                          onChange={(e) => setProfileForm({ ...profileForm, next_of_kin_email: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Systemic Fields */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-800/80">
+                    <div>
+                      <span className="text-[10px] text-slate-555 block font-semibold uppercase mb-1">Identity Number (Uneditable)</span>
+                      <div className="bg-slate-950/60 border border-slate-800/50 rounded-xl px-4 py-2.5 text-sm text-slate-400 font-mono select-none">
+                        {profileData?.id_number || '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-555 block font-semibold uppercase mb-1">Organization (Uneditable)</span>
+                      <div className="bg-slate-950/60 border border-slate-800/50 rounded-xl px-4 py-2.5 text-sm text-slate-400 font-medium select-none">
+                        {profileData?.organization || '—'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+                  {isEditingProfile ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditingProfile(false);
+                          setProfileForm({
+                            fullname: profileData?.fullname || '',
+                            gender: profileData?.gender || '',
+                            email: profileData?.email || '',
+                            phone_number: profileData?.phone_number || '',
+                            house_number: profileData?.house_number || '',
+                            surbub: profileData?.surbub || '',
+                            municipality: profileData?.municipality || '',
+                            city: profileData?.city || '',
+                            next_of_kin_fullname: profileData?.next_of_kin_fullname || '',
+                            next_of_kin_email: profileData?.next_of_kin_email || '',
+                            next_of_kin_phone: profileData?.next_of_kin_phone || ''
+                          });
+                          setProfileError('');
+                          setProfileSuccess('');
+                        }}
+                        className="px-5 py-2.5 bg-slate-880 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition-all duration-300"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={profileSaving}
+                        className="px-5 py-2.5 bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-sm transition-all duration-300 flex items-center justify-center gap-1.5 shadow-lg shadow-teal-500/20"
+                      >
+                        {profileSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Save Changes
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingProfile(true)}
+                      className="px-6 py-2.5 bg-slate-850 border border-slate-700/60 hover:bg-slate-800 text-teal-400 font-bold rounded-xl text-sm transition-all duration-300"
+                    >
+                      Edit Profile
+                    </button>
+                  )}
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
       {/* ================= BOOKING MODAL ================= */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto animate-fadeIn">
