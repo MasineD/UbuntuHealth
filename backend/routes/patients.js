@@ -371,6 +371,8 @@ router.get('/admin/compliance-alerts', protect, async (req, res) => {
     try {
         const result = await pool.query(
             `SELECT ca.id, ca.date::text, ca.visit_scheduled, ca.visit_date::text, ca.visit_reason, ca.visit_status, ca.visit_notes, ca.patient_id,
+                    ca.alert_type, ca.routine_id,
+                    r.description AS routine_description, r.time AS routine_time,
                     p.fullname AS patient_name, p.id_number AS patient_id_number,
                     p.gender AS patient_gender, p.email AS patient_email,
                     p.phone_number AS patient_phone, p.house_number, p.surbub, p.city,
@@ -378,6 +380,7 @@ router.get('/admin/compliance-alerts', protect, async (req, res) => {
              FROM patients.compliance_alerts ca
              JOIN users.patients p ON ca.patient_id = p.id
              JOIN users.admins a ON p.registra_id = a.id
+             LEFT JOIN patients.routines r ON ca.routine_id = r.id
              WHERE a.organization = $1 AND ca.date = CURRENT_DATE
              ORDER BY ca.id DESC`,
             [req.user.organization]
@@ -398,7 +401,11 @@ router.get('/admin/compliance-alerts', protect, async (req, res) => {
             visit_date: row.visit_date,
             visit_reason: row.visit_reason,
             visit_status: row.visit_status,
-            visit_notes: row.visit_notes
+            visit_notes: row.visit_notes,
+            alert_type: row.alert_type,
+            routine_id: row.routine_id,
+            routine_description: row.routine_description,
+            routine_time: row.routine_time
         }));
         return res.json({ complianceAlerts: alerts });
     } catch (error) {
