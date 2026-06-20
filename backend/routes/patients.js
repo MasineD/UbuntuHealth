@@ -125,8 +125,9 @@ router.get('/patients/:id/health-record', protect, async (req, res) => {
 
 // Update health record for a specific patient (Admin and Clinical Staff)
 router.put('/patients/:id/health-record', protect, async (req, res) => {
-    if (req.user.role !== 'admin' && req.user.role !== 'staff') {
-        return res.status(403).json({ message: 'Only administrative or clinical staff can update patient health records' });
+    // Only 'doctor/nurse' can edit a health record.
+    if (req.user.role !== 'staff' || req.user.staff_role !== 'doctor/nurse') {
+        return res.status(403).json({ message: 'Only clinical staff members with doctor/nurse role can edit patient health records.' });
     }
 
     const patientId = req.params.id;
@@ -143,21 +144,42 @@ router.put('/patients/:id/health-record', protect, async (req, res) => {
         evening_time,
         admission_date,
         release_date,
-        routines
+        routines,
+        patient_id_number
     } = req.body;
 
     try {
+        // Fetch patient to check id_number
+        const patientQueryRes = await pool.query('SELECT id_number FROM users.patients WHERE id = $1', [patientId]);
+        if (patientQueryRes.rows.length === 0) {
+            return res.status(404).json({ message: 'Patient not found' });
+        }
+        const dbPatient = patientQueryRes.rows[0];
+
+        // 1. Enforce ID number verification
+        if (!patient_id_number || patient_id_number.toString().trim() !== dbPatient.id_number.toString().trim()) {
+            return res.status(400).json({ message: 'Identity verification failed. Correct patient identity number is required to save changes.' });
+        }
+
         // Get or create health record ID
-        let recordRes = await pool.query('SELECT id FROM patients.health_records WHERE patient_id = $1', [patientId]);
+        let recordRes = await pool.query('SELECT id, on_treatment FROM patients.health_records WHERE patient_id = $1', [patientId]);
         let recordId;
+        let dbOnTreatment = false;
         if (recordRes.rows.length === 0) {
             const newRecord = await pool.query(
-                'INSERT INTO patients.health_records (patient_id, on_treatment) VALUES ($1, $2) RETURNING id',
+                'INSERT INTO patients.health_records (patient_id, on_treatment) VALUES ($1, $2) RETURNING id, on_treatment',
                 [patientId, false]
             );
             recordId = newRecord.rows[0].id;
+            dbOnTreatment = newRecord.rows[0].on_treatment;
         } else {
             recordId = recordRes.rows[0].id;
+            dbOnTreatment = recordRes.rows[0].on_treatment;
+        }
+
+        // 2. Enforce: Once indicated as 'On Treatment', it cannot be unchecked
+        if (dbOnTreatment === true && on_treatment === false) {
+            return res.status(400).json({ message: 'Once a patient is indicated as On Treatment, it cannot be unchecked.' });
         }
 
         // Update health record
