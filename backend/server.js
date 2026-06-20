@@ -182,7 +182,7 @@ const startMedicationChecker = () => {
         if (now >= triggerTime && now.getDate() === targetTime.getDate()) {
           // Check if already logged a compliance alert today
           const alertRes = await pool.query(
-            'SELECT 1 FROM patients.compliance_alerts WHERE patient_id = $1 AND date = CURRENT_DATE',
+            'SELECT 1 FROM patients.compliance_alerts WHERE patient_id = $1 AND date = CURRENT_DATE AND routine_id = -1',
             [patientId]
           );
 
@@ -198,9 +198,9 @@ const startMedicationChecker = () => {
             if (takenCount < expectedCount) {
               // Missed at least one medication task! Log the compliance alert
               const insertAlert = await pool.query(
-                `INSERT INTO patients.compliance_alerts (patient_id, date) 
-                 VALUES ($1, CURRENT_DATE)
-                 ON CONFLICT (patient_id, date) DO NOTHING 
+                `INSERT INTO patients.compliance_alerts (patient_id, date, routine_id, alert_type) 
+                 VALUES ($1, CURRENT_DATE, -1, 'medication')
+                 ON CONFLICT (patient_id, date, routine_id) DO NOTHING 
                  RETURNING id`,
                 [patientId]
               );
@@ -239,6 +239,138 @@ const startMedicationChecker = () => {
 };
 
 startMedicationChecker();
+
+// ========== BACKGROUND ROUTINE CHECKER ==========
+const sentPatientRoutineNotifications = new Set(); // Set of "YYYY-MM-DD:routine_id"
+
+const startRoutineChecker = () => {
+  setInterval(async () => {
+    try {
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      const currentWeekday = now.toLocaleDateString('en-US', { weekday: 'long' });
+      const currentDayOfMonth = now.getDate();
+
+      const routinesRes = await pool.query(`
+        SELECT r.id, r.record_id, r.weekly, r.monthly, r.weekday, r.day_of_month, r.time, r.description, r.status,
+               hr.patient_id, p.fullname AS patient_name, p.id_number, p.gender, p.email, p.phone_number,
+               p.house_number, p.surbub, p.city, p.next_of_kin_fullname, p.next_of_kin_phone,
+               a.organization, a.id as admin_id
+        FROM patients.routines r
+        JOIN patients.health_records hr ON r.record_id = hr.id
+        JOIN users.patients p ON hr.patient_id = p.id
+        JOIN users.admins a ON p.registra_id = a.id
+      `);
+
+      for (const routine of routinesRes.rows) {
+        let isScheduledToday = false;
+        if (routine.weekly) {
+          if (routine.weekday && routine.weekday.toLowerCase() === currentWeekday.toLowerCase()) {
+            isScheduledToday = true;
+          }
+        } else if (routine.monthly) {
+          if (routine.day_of_month === currentDayOfMonth) {
+            isScheduledToday = true;
+          }
+        } else {
+          isScheduledToday = true;
+        }
+
+        if (!isScheduledToday) continue;
+
+        const desc = (routine.description || '').toLowerCase().trim();
+        const isTargetRoutine = 
+          desc.includes('doctor visit') || 
+          desc.includes('checkup') || 
+          desc.includes('refill') || 
+          desc === 'doctor visit/ checkup' || 
+          desc === 'doctor visit/checkup' || 
+          desc === 'doctor visit / checkup' || 
+          desc === 'medicine refill';
+
+        if (!isTargetRoutine) continue;
+
+        if (!routine.time) continue;
+        const [h, m, s] = routine.time.split(':').map(Number);
+        const routineTime = new Date(now.getTime());
+        routineTime.setHours(h, m, s || 0, 0);
+
+        const patientNotifyTime = new Date(routineTime.getTime() - 30 * 1000);
+        const adminNotifyTime = new Date(routineTime.getTime() + 30 * 1000);
+
+        // a. Patient notification: 30 seconds before routine time
+        if (now >= patientNotifyTime && now < routineTime) {
+          const key = `${todayStr}:${routine.id}`;
+          if (!sentPatientRoutineNotifications.has(key)) {
+            console.log(`Sending routine notification to patient ${routine.patient_id} for routine ${routine.id}.`);
+            const notificationData = {
+              type: 'routine',
+              title: 'Upcoming Routine Task',
+              message: `Reminder: You have a scheduled "${routine.description}" at ${routine.time.substring(0, 5)} today.`,
+              timestamp: new Date().toISOString()
+            };
+            io.to(`org_${routine.organization}_user_patient_${routine.patient_id}`).emit('new-notification', notificationData);
+            sentPatientRoutineNotifications.add(key);
+          }
+        }
+
+        // b. Admin notification & compliance card: 30 seconds after routine time if not marked as attended
+        if (now >= adminNotifyTime) {
+          if (!routine.status) {
+            const alertRes = await pool.query(
+              `SELECT 1 FROM patients.compliance_alerts 
+               WHERE patient_id = $1 AND date = $2 AND routine_id = $3`,
+              [routine.patient_id, todayStr, routine.id]
+            );
+
+            if (alertRes.rows.length === 0) {
+              const insertAlert = await pool.query(
+                `INSERT INTO patients.compliance_alerts (patient_id, date, routine_id, alert_type, visit_reason)
+                 VALUES ($1, $2, $3, 'routine', $4)
+                 ON CONFLICT (patient_id, date, routine_id) DO NOTHING
+                 RETURNING id`,
+                [
+                  routine.patient_id,
+                  todayStr,
+                  routine.id,
+                  `Routine Task Non-Compliance Follow-up: ${routine.description}`
+                ]
+              );
+
+              if (insertAlert.rows.length > 0) {
+                console.log(`Compliance failure detected for routine ${routine.id} (patient: ${routine.patient_name}). Alerting admin.`);
+                const alertPayload = {
+                  type: 'compliance_alert',
+                  title: 'Patient Routine Non-Compliance',
+                  message: `Patient "${routine.patient_name}" did not attend scheduled routine "${routine.description}" at ${routine.time.substring(0, 5)}.`,
+                  timestamp: new Date().toISOString(),
+                  patient: {
+                    id: routine.patient_id,
+                    fullname: routine.patient_name,
+                    id_number: routine.id_number,
+                    gender: routine.gender,
+                    email: routine.email,
+                    phone_number: routine.phone_number,
+                    house_number: routine.house_number,
+                    surbub: routine.surbub,
+                    city: routine.city,
+                    next_of_kin_fullname: routine.next_of_kin_fullname,
+                    next_of_kin_phone: routine.next_of_kin_phone
+                  }
+                };
+                io.to(`org_${routine.organization}_role_admin`).emit('new-notification', alertPayload);
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error in routine checker interval:', err.message);
+    }
+  }, 5000); // Check every 5 seconds
+};
+
+startRoutineChecker();
 // ========== END OF BACKGROUND CHECKER ==========
 
 // Basic test route
@@ -246,7 +378,7 @@ app.get('/', (req, res) => {
   res.send('Server is running');
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

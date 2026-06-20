@@ -219,7 +219,11 @@ function Dashboard({ user, onLogout, actionLoading }) {
   const handleScheduleHomeVisit = (alert) => {
     setSelectedAlertForVisit(alert);
     setSelectedChwId('');
-    setVisitReason('Medication Non-Compliance Follow-up');
+    if (alert.alert_type === 'routine') {
+      setVisitReason(`Routine Task Non-Compliance Follow-up: ${alert.routine_description || ''}`);
+    } else {
+      setVisitReason('Medication Non-Compliance Follow-up');
+    }
     setVisitDate(new Date().toISOString().split('T')[0]);
     setIsScheduleVisitModalOpen(true);
   };
@@ -1172,12 +1176,31 @@ function Dashboard({ user, onLogout, actionLoading }) {
                               <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono text-[10px] px-2 py-0.5 rounded font-bold uppercase">
                                 Visited
                               </span>
+                            ) : alert.alert_type === 'routine' ? (
+                              <span className="bg-amber-500/10 border border-amber-500/20 text-amber-400 font-mono text-[10px] px-2 py-0.5 rounded font-bold uppercase">
+                                Missed Routine
+                              </span>
                             ) : (
                               <span className="bg-red-500/10 border border-red-500/20 text-red-400 font-mono text-[10px] px-2 py-0.5 rounded font-bold uppercase">
                                 Did not take medication
                               </span>
                             )}
                           </div>
+
+                          {alert.alert_type === 'routine' && (
+                            <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-3 text-xs space-y-1.5 my-2">
+                              <div className="text-slate-350">
+                                <strong>Routine Task:</strong> <span className="text-slate-200 font-medium">{alert.routine_description}</span>
+                              </div>
+                              <div className="text-slate-350">
+                                <strong>Scheduled Time:</strong> <span className="text-slate-200 font-mono">{alert.routine_time ? alert.routine_time.substring(0, 5) : 'N/A'}</span>
+                              </div>
+                              <div className="text-rose-400 font-medium">
+                                <strong>Alert:</strong> Patient missed their routine checkup/refill.
+                              </div>
+                            </div>
+                          )}
+
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-slate-400 border-t border-slate-800/40 pt-2.5">
                             <div><strong>Phone:</strong> {alert.patient_phone || 'N/A'}</div>
                             <div><strong>Gender:</strong> {alert.patient_gender || 'N/A'}</div>
