@@ -6,6 +6,10 @@ import cookieParser from 'cookie-parser';
 
 // Import your existing routes
 import authRoutes from './routes/auth.js';
+import patientsRoutes from './routes/patients.js';
+import chwsRoutes from './routes/chws.js';
+import staffRoutes from './routes/staff.js';
+import referralsRoutes from './routes/referrals.js';
 import dotenv from 'dotenv'
 
 dotenv.config()
@@ -34,6 +38,10 @@ app.use(cookieParser());
 
 // ========== EXISTING ROUTES ==========
 app.use('/api/auth', authRoutes);
+app.use('/api/auth', patientsRoutes);
+app.use('/api/auth', chwsRoutes);
+app.use('/api/auth', staffRoutes);
+app.use('/api/auth', referralsRoutes);
 
 // ========== SOCKET.IO CODE (ADD THIS) ==========
 // Store online users and their socket IDs

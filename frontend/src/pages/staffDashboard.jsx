@@ -15,10 +15,142 @@ const api = axios.create({
 });
 
 function StaffDashboard({ user, onLogout, actionLoading }) {
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'consultations' | 'vitals'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'consultations' | 'vitals' | 'referrals'
   const [patients, setPatients] = useState([]);
   const [loadingPatients, setLoadingPatients] = useState(false);
   const [vitalsSearchQuery, setVitalsSearchQuery] = useState('');
+
+  // Referrals State
+  const [referrals, setReferrals] = useState({ incoming: [], outgoing: [] });
+  const [loadingReferrals, setLoadingReferrals] = useState(false);
+  const [isReferralModalOpen, setIsReferralModalOpen] = useState(false);
+  const [referralModalLoading, setReferralModalLoading] = useState(false);
+  const [referralModalError, setReferralModalError] = useState('');
+  const [referralModalSuccess, setReferralModalSuccess] = useState('');
+  const [organizationsList, setOrganizationsList] = useState([]);
+  const [orgStaffList, setOrgStaffList] = useState([]);
+  const [orgPatientsList, setOrgPatientsList] = useState([]);
+
+  // Search queries for referral modal selectors
+  const [patientQuery, setPatientQuery] = useState('');
+  const [orgQuery, setOrgQuery] = useState('');
+  const [deptQuery, setDeptQuery] = useState('');
+  const [staffQuery, setStaffQuery] = useState('');
+
+  const [referralForm, setReferralForm] = useState({
+    personel: '',
+    organization_to: '',
+    department_to: 'General Medicine',
+    staff_to: '',
+    reason: '',
+    arrival_date: '',
+    arrival_time: ''
+  });
+
+  const fetchReferrals = async () => {
+    setLoadingReferrals(true);
+    try {
+      const response = await api.get('/auth/referrals');
+      if (response.data) {
+        setReferrals({
+          incoming: response.data.incoming || [],
+          outgoing: response.data.outgoing || []
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching referrals:', err);
+    } finally {
+      setLoadingReferrals(false);
+    }
+  };
+
+  const fetchOrganizations = async () => {
+    try {
+      const response = await api.get('/auth/organizations');
+      if (response.data && response.data.organizations) {
+        setOrganizationsList(response.data.organizations);
+      }
+    } catch (err) {
+      console.error('Error fetching organizations list:', err);
+    }
+  };
+
+  const fetchOrganizationPatients = async () => {
+    try {
+      const response = await api.get('/auth/organization-patients');
+      if (response.data && response.data.patients) {
+        setOrgPatientsList(response.data.patients);
+      }
+    } catch (err) {
+      console.error('Error fetching organization patients:', err);
+    }
+  };
+
+  const handleOrgChange = async (orgName) => {
+    setReferralForm(prev => ({ ...prev, organization_to: orgName, staff_to: '' }));
+    setOrgStaffList([]);
+    if (!orgName) return;
+    try {
+      const response = await api.get(`/auth/organizations/${encodeURIComponent(orgName)}/staff`);
+      if (response.data && response.data.staff) {
+        setOrgStaffList(response.data.staff);
+      }
+    } catch (err) {
+      console.error('Error fetching organization staff:', err);
+    }
+  };
+
+  const handleCreateReferral = async (e) => {
+    e.preventDefault();
+    setReferralModalError('');
+    setReferralModalSuccess('');
+    setReferralModalLoading(true);
+
+    try {
+      await api.post('/auth/referrals', referralForm);
+      setReferralModalSuccess('Referral created successfully!');
+      fetchReferrals();
+      setReferralForm({
+        personel: '',
+        organization_to: '',
+        department_to: 'General Medicine',
+        staff_to: '',
+        reason: '',
+        arrival_date: '',
+        arrival_time: ''
+      });
+      setPatientQuery('');
+      setOrgQuery('');
+      setDeptQuery('');
+      setStaffQuery('');
+      setTimeout(() => {
+        closeReferralModal();
+      }, 1500);
+    } catch (err) {
+      setReferralModalError(err.response?.data?.message || 'Failed to create referral');
+    } finally {
+      setReferralModalLoading(false);
+    }
+  };
+
+  const closeReferralModal = () => {
+    setIsReferralModalOpen(false);
+    setReferralModalError('');
+    setReferralModalSuccess('');
+    setPatientQuery('');
+    setOrgQuery('');
+    setDeptQuery('');
+    setStaffQuery('');
+  };
+
+  const handleUpdateReferralStatus = async (refId) => {
+    try {
+      await api.put(`/auth/referrals/${refId}/status`);
+      fetchReferrals();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update referral status');
+    }
+  };
 
   // Selected Patient & Health Record Modal State
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -108,6 +240,9 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
 
   useEffect(() => {
     fetchPatients();
+    fetchReferrals();
+    fetchOrganizations();
+    fetchOrganizationPatients();
   }, []);
 
   const openHealthRecord = async (patient) => {
@@ -229,8 +364,23 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
   const sidebarItems = [
     { id: 'overview', name: 'Overview', icon: LayoutDashboard },
     { id: 'consultations', name: 'Consultations', icon: ClipboardList },
-    { id: 'vitals', name: 'Patient Vitals', icon: Heart }
+    { id: 'vitals', name: 'Patient Vitals', icon: Heart },
+    { id: 'referrals', name: 'Referrals', icon: Calendar }
   ];
+
+  const filteredPatients = orgPatientsList.filter(p => 
+    p.fullname.toLowerCase().includes(patientQuery.toLowerCase())
+  );
+  const filteredOrgs = organizationsList.filter(org => 
+    org.toLowerCase().includes(orgQuery.toLowerCase())
+  );
+  const departments = ['General Medicine', 'Cardiology', 'Pediatrics', 'Orthopedics', 'Dermatology', 'Neurology', 'Endocrinology', 'Nephrology', 'Obstetrics & Gynecology', 'Psychiatry', 'Physical Therapy'];
+  const filteredDepts = departments.filter(dept => 
+    dept.toLowerCase().includes(deptQuery.toLowerCase())
+  );
+  const filteredStaff = orgStaffList.filter(s => 
+    s.fullname.toLowerCase().includes(staffQuery.toLowerCase())
+  );
 
   if (!user) return null;
 
@@ -554,6 +704,163 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
             </div>
           )}
 
+          {/* ================= PAGE: REFERRALS ================= */}
+          {activeTab === 'referrals' && (
+            <div className="space-y-6">
+              {/* Incoming Referrals */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                  <div className="space-y-0.5">
+                    <h3 className="font-bold text-slate-200">Incoming Referrals</h3>
+                    <p className="text-slate-500 text-xs">Patients referred to you specifically</p>
+                  </div>
+                  <button 
+                    onClick={() => { setIsReferralModalOpen(true); fetchOrganizations(); fetchOrganizationPatients(); }}
+                    className="py-2 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors"
+                  >
+                    <Plus className="h-4 w-4" /> Create Referral
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 text-xs">
+                        <th className="py-3 px-4">Patient</th>
+                        <th className="py-3 px-4">Origin / Referrer</th>
+                        <th className="py-3 px-4">Department & Destination</th>
+                        <th className="py-3 px-4">Arrival Date / Time</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/80">
+                      {loadingReferrals ? (
+                        <tr>
+                          <td colSpan="6" className="py-8 text-center text-slate-500">
+                            <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-400" />
+                            Loading incoming referrals...
+                          </td>
+                        </tr>
+                      ) : referrals.incoming.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="py-8 text-center text-slate-500">
+                            No incoming referrals found.
+                          </td>
+                        </tr>
+                      ) : (
+                        referrals.incoming.map((ref) => (
+                          <tr key={ref.id} className="hover:bg-slate-800/20 transition-colors">
+                            <td className="py-3.5 px-4 font-bold text-slate-200">
+                              {ref.personel}
+                              <span className="block text-[10px] text-slate-500 font-mono mt-0.5">Ref ID: #{ref.id}</span>
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-300">
+                              <span className="block capitalize">{ref.referrer_role}</span>
+                              <span className="block text-xs text-slate-550">ID: {ref.referrer_id}</span>
+                            </td>
+                            <td className="py-3.5 px-4 text-xs">
+                              <span className="block text-slate-200">{ref.department_to}</span>
+                              <span className="block text-slate-400 mt-0.5">Recipient: {ref.staff_to || 'Organization Admin'}</span>
+                            </td>
+                            <td className="py-3.5 px-4 font-mono text-xs text-slate-355 font-normal">
+                              {ref.arrival_date ? ref.arrival_date.split('T')[0] : 'N/A'}
+                              <span className="block text-slate-500 mt-0.5">{ref.arrival_time || ''}</span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                ref.status ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
+                              }`}>
+                                {ref.status ? 'Attended' : 'Pending'}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              {!ref.status ? (
+                                <button
+                                  onClick={() => handleUpdateReferralStatus(ref.id)}
+                                  className="py-1 px-2.5 bg-emerald-500 hover:bg-emerald-450 text-slate-950 text-xs font-bold rounded-lg transition-colors"
+                                >
+                                  Mark Attended
+                                </button>
+                              ) : (
+                                <span className="text-emerald-500 text-xs font-semibold">Complete</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Outgoing Referrals */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div className="pb-4 border-b border-slate-800">
+                  <h3 className="font-bold text-slate-200">Outgoing Referrals</h3>
+                  <p className="text-slate-500 text-xs">Patients you have referred to other health networks</p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 text-xs">
+                        <th className="py-3 px-4">Patient</th>
+                        <th className="py-3 px-4">Target Organization</th>
+                        <th className="py-3 px-4">Department & Destination</th>
+                        <th className="py-3 px-4">Arrival Date / Time</th>
+                        <th className="py-3 px-4">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/80">
+                      {loadingReferrals ? (
+                        <tr>
+                          <td colSpan="5" className="py-8 text-center text-slate-500">
+                            <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-400" />
+                            Loading outgoing referrals...
+                          </td>
+                        </tr>
+                      ) : referrals.outgoing.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="py-8 text-center text-slate-500">
+                            No outgoing referrals found.
+                          </td>
+                        </tr>
+                      ) : (
+                        referrals.outgoing.map((ref) => (
+                          <tr key={ref.id} className="hover:bg-slate-800/20 transition-colors">
+                            <td className="py-3.5 px-4 font-bold text-slate-200">
+                              {ref.personel}
+                              <span className="block text-[10px] text-slate-500 font-mono mt-0.5">Ref ID: #{ref.id}</span>
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-300 font-semibold">
+                              {ref.organization_to}
+                            </td>
+                            <td className="py-3.5 px-4 text-xs">
+                              <span className="block text-slate-200">{ref.department_to}</span>
+                              <span className="block text-slate-400 mt-0.5">Recipient: {ref.staff_to || 'Organization Admin'}</span>
+                            </td>
+                            <td className="py-3.5 px-4 font-mono text-xs text-slate-355 font-normal">
+                              {ref.arrival_date ? ref.arrival_date.split('T')[0] : 'N/A'}
+                              <span className="block text-slate-500 mt-0.5">{ref.arrival_time || ''}</span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                ref.status ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
+                              }`}>
+                                {ref.status ? 'Attended' : 'Pending'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
         </section>
       </main>
 
@@ -858,6 +1165,203 @@ function StaffDashboard({ user, onLogout, actionLoading }) {
                 >
                   {savingHealthRecord && <Loader2 className="h-5 w-5 animate-spin" />}
                   {savingHealthRecord ? 'Saving Record...' : 'Save Health Record'}
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+      {/* ================= CREATE REFERRAL MODAL ================= */}
+      {isReferralModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={closeReferralModal}
+              className="absolute top-4 right-4 text-slate-550 hover:text-slate-355 transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <h2 className="text-xl font-bold text-white">Create New Referral</h2>
+              <p className="text-slate-400 text-xs mt-1">Initiate a transfer to another medical facility or staff member.</p>
+            </div>
+
+            {/* Error & Success Notification */}
+            {referralModalError && (
+              <div className="bg-red-950/40 border border-red-500/25 text-red-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{referralModalError}</span>
+              </div>
+            )}
+            {referralModalSuccess && (
+              <div className="bg-emerald-950/40 border border-emerald-500/25 text-emerald-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{referralModalSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleCreateReferral} className="space-y-4">
+              {/* Patient Selector */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs text-slate-400 font-semibold">Select Patient *</label>
+                  <input 
+                    type="text" 
+                    placeholder="Search patient by name..." 
+                    value={patientQuery}
+                    onChange={e => setPatientQuery(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-lg py-1 px-2.5 text-xs text-slate-300 placeholder-slate-650 outline-none focus:border-emerald-500 w-48 transition-colors"
+                  />
+                </div>
+                <select
+                  required
+                  value={referralForm.personel}
+                  onChange={(e) => setReferralForm({...referralForm, personel: e.target.value})}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                >
+                  <option value="">-- Choose Patient --</option>
+                  {filteredPatients.map(p => (
+                    <option key={p.id} value={`${p.fullname} (${p.id_number})`}>
+                      {p.fullname} ({p.id_number})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Destination Organization */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs text-slate-400 font-semibold">Target Organization *</label>
+                    <input 
+                      type="text" 
+                      placeholder="Search organization..." 
+                      value={orgQuery}
+                      onChange={e => setOrgQuery(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-lg py-1 px-2.5 text-xs text-slate-300 placeholder-slate-650 outline-none focus:border-emerald-500 w-32 transition-colors"
+                    />
+                  </div>
+                  <select
+                    required
+                    value={referralForm.organization_to}
+                    onChange={(e) => handleOrgChange(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                  >
+                    <option value="">-- Choose Organization --</option>
+                    {filteredOrgs.map(org => (
+                      <option key={org} value={org}>{org}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Target Department */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs text-slate-400 font-semibold">Department To *</label>
+                    <input 
+                      type="text" 
+                      placeholder="Search department..." 
+                      value={deptQuery}
+                      onChange={e => setDeptQuery(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-lg py-1 px-2.5 text-xs text-slate-300 placeholder-slate-650 outline-none focus:border-emerald-500 w-32 transition-colors"
+                    />
+                  </div>
+                  <select
+                    required
+                    value={referralForm.department_to}
+                    onChange={(e) => setReferralForm({...referralForm, department_to: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                  >
+                    {filteredDepts.map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Target Staff Member (Optional) */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs text-slate-400 font-semibold">Target Clinician / Staff member (Optional)</label>
+                  <input 
+                    type="text" 
+                    placeholder="Search staff by name..." 
+                    value={staffQuery}
+                    onChange={e => setStaffQuery(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-lg py-1 px-2.5 text-xs text-slate-300 placeholder-slate-650 outline-none focus:border-emerald-500 w-48 transition-colors"
+                  />
+                </div>
+                <select
+                  value={referralForm.staff_to}
+                  onChange={(e) => setReferralForm({...referralForm, staff_to: e.target.value})}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                >
+                  <option value="">-- Defaults to Organization Admin --</option>
+                  {filteredStaff.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.fullname} ({s.staff_role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Arrival Date */}
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-semibold">Estimated Arrival Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={referralForm.arrival_date}
+                    onChange={(e) => setReferralForm({...referralForm, arrival_date: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+
+                {/* Arrival Time */}
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-semibold">Estimated Arrival Time</label>
+                  <input
+                    type="time"
+                    value={referralForm.arrival_time}
+                    onChange={(e) => setReferralForm({...referralForm, arrival_time: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Referral Reason */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold">Reason for Referral *</label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="State the symptoms, diagnosis, or reason for transfer..."
+                  value={referralForm.reason}
+                  onChange={(e) => setReferralForm({...referralForm, reason: e.target.value})}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors resize-none"
+                />
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-4 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={closeReferralModal}
+                  className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={referralModalLoading}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  {referralModalLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+                  {referralModalLoading ? 'Creating Referral...' : 'Create Referral'}
                 </button>
               </div>
 
