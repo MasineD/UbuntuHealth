@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { LayoutDashboard, Users, Calendar, ArrowLeftRight, MessageSquare, LogOut, Loader2,ShieldCheck,Search,Bell,Plus,Send,User as UserIcon,CheckCircle,FileText,Clock,Menu,ChevronRight
+import { LayoutDashboard, Users, Calendar, ArrowLeftRight, MessageSquare, LogOut, Loader2,ShieldCheck,Search,Bell,Plus,Send,User as UserIcon,CheckCircle,FileText,Clock,Menu,ChevronRight,X, Activity, AlertTriangle
 } from 'lucide-react';
+import { io } from 'socket.io-client';
+import ChatRoom from '../components/ChatRoom';
 
 const api = axios.create({
   baseURL: 'http://localhost:5000/api',
@@ -16,28 +18,100 @@ function Dashboard({ user, onLogout, actionLoading }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [staffSearchQuery, setStaffSearchQuery] = useState('');
   
-  // Chat Room state simulation
-  const [chatMessages, setChatMessages] = useState([
-    { id: 1, sender: 'Dr. Sarah Jenkins', role: 'Cardiologist', text: 'Has patient John Doe completed his routine blood work?', time: '09:30 AM' },
-    { id: 2, sender: 'You', role: 'Super Admin', text: 'Yes, John Doe’s lipid panel results are uploaded in records.', time: '09:35 AM' },
-    { id: 3, sender: 'Dr. Sarah Jenkins', role: 'Cardiologist', text: 'Perfect. I will review them before our 2 PM appointment.', time: '09:37 AM' },
-    { id: 4, sender: 'Chw. Musa Dube', role: 'Community Health Worker', text: 'Visited patient Jane Smith today. Routine checks are normal, medication tasks completed.', time: '10:15 AM' }
-  ]);
-  const [newMessage, setNewMessage] = useState('');
+  // Socket & Notifications state
+  const [socket, setSocket] = useState(null);
+  const [toasts, setToasts] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
 
-  const handleSendMessage = (e) => {
-    e.preventDefault();
-    if (!newMessage.trim()) return;
-    const msg = {
-      id: chatMessages.length + 1,
-      sender: 'You',
-      role: 'Super Admin',
-      text: newMessage,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  useEffect(() => {
+    let active = true;
+    let socketInstance;
+
+    const initSocket = async () => {
+      try {
+        const orgRes = await api.get('/auth/my-organization');
+        if (!active) return;
+        const orgName = orgRes.data.organization;
+        if (!orgName) return;
+
+        socketInstance = io('http://localhost:5000');
+        
+        socketInstance.on('connect', () => {
+          socketInstance.emit('register-user', {
+            userId: user.id,
+            role: user.role,
+            organization: orgName,
+            staffRole: user.staff_role
+          });
+        });
+
+        socketInstance.on('new-notification', (data) => {
+          const notificationData = {
+            ...data,
+            unread: true
+          };
+          setNotifications(prev => [notificationData, ...prev]);
+
+          const newToast = {
+            id: Date.now() + Math.random(),
+            type: data.type === 'compliance_alert' 
+              ? 'compliance_alert' 
+              : (data.type === 'referral_created' ? 'referral' : 'appointment'),
+            title: data.title,
+            message: data.message
+          };
+          setToasts(prev => [...prev, newToast]);
+
+          setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== newToast.id));
+          }, 5000);
+
+          if (data.type === 'compliance_alert') {
+            fetchComplianceAlerts();
+          }
+        });
+
+        socketInstance.on('new-message', (msg) => {
+          const isFromSelf = msg.sender_id.toString() === user.id.toString() && msg.sender_role === user.role;
+          if (!isFromSelf) {
+            const notificationData = {
+              type: 'message',
+              title: `New Message from ${msg.sender_name}`,
+              message: msg.message_text,
+              timestamp: new Date().toISOString(),
+              unread: true
+            };
+            setNotifications(prev => [notificationData, ...prev]);
+
+            const newToast = {
+              id: Date.now() + Math.random(),
+              type: 'message',
+              title: `New Message from ${msg.sender_name}`,
+              message: msg.message_text.length > 60 ? msg.message_text.substring(0, 60) + '...' : msg.message_text
+            };
+            setToasts(prev => [...prev, newToast]);
+            setTimeout(() => {
+              setToasts(prev => prev.filter(t => t.id !== newToast.id));
+            }, 5000);
+          }
+        });
+
+        setSocket(socketInstance);
+      } catch (err) {
+        console.error('Failed to initialize socket:', err);
+      }
     };
-    setChatMessages([...chatMessages, msg]);
-    setNewMessage('');
-  };
+
+    initSocket();
+
+    return () => {
+      active = false;
+      if (socketInstance) {
+        socketInstance.disconnect();
+      }
+    };
+  }, [user]);
 
   const calculateAgeFromId = (idNumber) => {
     if (!idNumber || idNumber.length !== 13) return 30;
@@ -68,7 +142,41 @@ function Dashboard({ user, onLogout, actionLoading }) {
 
   // State to hold retrieved patients
   const [patients, setPatients] = useState([]);
+  const [complianceAlerts, setComplianceAlerts] = useState([]);
+  const [isScheduleVisitModalOpen, setIsScheduleVisitModalOpen] = useState(false);
+  const [selectedAlertForVisit, setSelectedAlertForVisit] = useState(null);
+  const [selectedChwId, setSelectedChwId] = useState('');
+  const [visitReason, setVisitReason] = useState('Medication Non-Compliance Follow-up');
+  const [visitDate, setVisitDate] = useState('');
   const [loadingPatients, setLoadingPatients] = useState(false);
+
+  // Appointments administrative state
+  const [appointments, setAppointments] = useState([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
+  const [appointmentGroup, setAppointmentGroup] = useState('our-patients'); // 'our-patients' | 'new-patients'
+
+  const fetchAppointments = async () => {
+    setLoadingAppointments(true);
+    try {
+      const response = await api.get('/auth/appointments');
+      if (response.data && response.data.appointments) {
+        setAppointments(response.data.appointments);
+      }
+    } catch (err) {
+      console.error('Error fetching appointments:', err);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  };
+
+  const handleUpdateAppointmentStatus = async (appId, status) => {
+    try {
+      await api.put(`/auth/appointments/${appId}/status`, { status });
+      fetchAppointments();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update appointment status');
+    }
+  };
 
   const fetchPatients = async () => {
     setLoadingPatients(true);
@@ -92,6 +200,45 @@ function Dashboard({ user, onLogout, actionLoading }) {
       console.error('Error fetching patients:', err);
     } finally {
       setLoadingPatients(false);
+    }
+  };
+
+  const fetchComplianceAlerts = async () => {
+    try {
+      const response = await api.get('/auth/admin/compliance-alerts');
+      if (response.data && response.data.complianceAlerts) {
+        setComplianceAlerts(response.data.complianceAlerts);
+      }
+    } catch (err) {
+      console.error('Error fetching compliance alerts:', err);
+    }
+  };
+
+  const handleScheduleHomeVisit = (alert) => {
+    setSelectedAlertForVisit(alert);
+    setSelectedChwId('');
+    setVisitReason('Medication Non-Compliance Follow-up');
+    setVisitDate(new Date().toISOString().split('T')[0]);
+    setIsScheduleVisitModalOpen(true);
+  };
+
+  const submitScheduleHomeVisit = async () => {
+    if (!selectedAlertForVisit || !selectedChwId || !visitDate) return;
+    try {
+      const response = await api.post(`/auth/admin/compliance-alerts/${selectedAlertForVisit.id}/schedule-visit`, {
+        chwId: selectedChwId,
+        reason: visitReason,
+        date: visitDate
+      });
+      if (response.data) {
+        setComplianceAlerts(prev => prev.map(a => 
+          a.id === selectedAlertForVisit.id ? { ...a, visit_scheduled: true, visit_date: visitDate, visit_reason: visitReason } : a
+        ));
+        setIsScheduleVisitModalOpen(false);
+        setSelectedAlertForVisit(null);
+      }
+    } catch (err) {
+      console.error('Error scheduling home visit:', err);
     }
   };
 
@@ -400,10 +547,147 @@ function Dashboard({ user, onLogout, actionLoading }) {
     }
   };
 
+  // Referrals State
+  const [referrals, setReferrals] = useState({ incoming: [], outgoing: [] });
+  const [loadingReferrals, setLoadingReferrals] = useState(false);
+  const [isReferralModalOpen, setIsReferralModalOpen] = useState(false);
+  const [referralModalLoading, setReferralModalLoading] = useState(false);
+  const [referralModalError, setReferralModalError] = useState('');
+  const [referralModalSuccess, setReferralModalSuccess] = useState('');
+  const [organizationsList, setOrganizationsList] = useState([]);
+  const [orgStaffList, setOrgStaffList] = useState([]);
+  const [orgPatientsList, setOrgPatientsList] = useState([]);
+
+  // Search queries for referral modal selectors
+  const [patientQuery, setPatientQuery] = useState('');
+  const [orgQuery, setOrgQuery] = useState('');
+  const [deptQuery, setDeptQuery] = useState('');
+  const [staffQuery, setStaffQuery] = useState('');
+
+  const [referralForm, setReferralForm] = useState({
+    personel: '',
+    organization_to: '',
+    department_to: 'General Medicine',
+    staff_to: '',
+    reason: '',
+    arrival_date: '',
+    arrival_time: ''
+  });
+
+  const fetchReferrals = async () => {
+    setLoadingReferrals(true);
+    try {
+      const response = await api.get('/auth/referrals');
+      if (response.data) {
+        setReferrals({
+          incoming: response.data.incoming || [],
+          outgoing: response.data.outgoing || []
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching referrals:', err);
+    } finally {
+      setLoadingReferrals(false);
+    }
+  };
+
+  const fetchOrganizations = async () => {
+    try {
+      const response = await api.get('/auth/organizations');
+      if (response.data && response.data.organizations) {
+        setOrganizationsList(response.data.organizations);
+      }
+    } catch (err) {
+      console.error('Error fetching organizations list:', err);
+    }
+  };
+
+  const fetchOrganizationPatients = async () => {
+    try {
+      const response = await api.get('/auth/organization-patients');
+      if (response.data && response.data.patients) {
+        setOrgPatientsList(response.data.patients);
+      }
+    } catch (err) {
+      console.error('Error fetching organization patients:', err);
+    }
+  };
+
+  const handleOrgChange = async (orgName) => {
+    setReferralForm(prev => ({ ...prev, organization_to: orgName, staff_to: '' }));
+    setOrgStaffList([]);
+    if (!orgName) return;
+    try {
+      const response = await api.get(`/auth/organizations/${encodeURIComponent(orgName)}/staff`);
+      if (response.data && response.data.staff) {
+        setOrgStaffList(response.data.staff);
+      }
+    } catch (err) {
+      console.error('Error fetching organization staff:', err);
+    }
+  };
+
+  const handleCreateReferral = async (e) => {
+    e.preventDefault();
+    setReferralModalError('');
+    setReferralModalSuccess('');
+    setReferralModalLoading(true);
+
+    try {
+      await api.post('/auth/referrals', referralForm);
+      setReferralModalSuccess('Referral created successfully!');
+      fetchReferrals();
+      setReferralForm({
+        personel: '',
+        organization_to: '',
+        department_to: 'General Medicine',
+        staff_to: '',
+        reason: '',
+        arrival_date: '',
+        arrival_time: ''
+      });
+      setPatientQuery('');
+      setOrgQuery('');
+      setDeptQuery('');
+      setStaffQuery('');
+      setTimeout(() => {
+        closeReferralModal();
+      }, 1500);
+    } catch (err) {
+      setReferralModalError(err.response?.data?.message || 'Failed to create referral');
+    } finally {
+      setReferralModalLoading(false);
+    }
+  };
+
+  const closeReferralModal = () => {
+    setIsReferralModalOpen(false);
+    setReferralModalError('');
+    setReferralModalSuccess('');
+    setPatientQuery('');
+    setOrgQuery('');
+    setDeptQuery('');
+    setStaffQuery('');
+  };
+
+  const handleUpdateReferralStatus = async (refId) => {
+    try {
+      await api.put(`/auth/referrals/${refId}/status`);
+      fetchReferrals();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update referral status');
+    }
+  };
+
   useEffect(() => {
     fetchPatients();
     fetchChws();
     fetchStaff();
+    fetchReferrals();
+    fetchOrganizations();
+    fetchOrganizationPatients();
+    fetchAppointments();
+    fetchComplianceAlerts();
   }, []);
 
   // Modal State
@@ -518,6 +802,20 @@ function Dashboard({ user, onLogout, actionLoading }) {
     { id: 'chat', name: 'Chat Room', icon: MessageSquare }
   ];
 
+  const filteredPatients = orgPatientsList.filter(p => 
+    p.fullname.toLowerCase().includes(patientQuery.toLowerCase())
+  );
+  const filteredOrgs = organizationsList.filter(org => 
+    org.toLowerCase().includes(orgQuery.toLowerCase())
+  );
+  const departments = ['General Medicine', 'Cardiology', 'Pediatrics', 'Orthopedics', 'Dermatology', 'Neurology', 'Endocrinology', 'Nephrology', 'Obstetrics & Gynecology', 'Psychiatry', 'Physical Therapy'];
+  const filteredDepts = departments.filter(dept => 
+    dept.toLowerCase().includes(deptQuery.toLowerCase())
+  );
+  const filteredStaff = orgStaffList.filter(s => 
+    s.fullname.toLowerCase().includes(staffQuery.toLowerCase())
+  );
+
   if (!user) return null;
 
   return (
@@ -570,9 +868,9 @@ function Dashboard({ user, onLogout, actionLoading }) {
                 >
                   <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
                   {item.name}
-                  {item.id === 'chat' && (
+                  {item.id === 'chat' && notifications.some(n => n.type === 'message') && (
                     <span className="ml-auto bg-emerald-500 text-slate-950 rounded-full text-[10px] font-extrabold px-1.5 py-0.5 animate-pulse">
-                      4
+                      •
                     </span>
                   )}
                 </button>
@@ -625,10 +923,63 @@ function Dashboard({ user, onLogout, actionLoading }) {
             </div>
 
             {/* Notification Badge */}
-            <button className="h-9 w-9 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-200 transition-colors relative">
-              <Bell className="h-4.5 w-4.5" />
-              <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-emerald-500 rounded-full" />
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => setShowNotificationsDropdown(!showNotificationsDropdown)}
+                className="h-9 w-9 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-200 transition-colors relative"
+              >
+                <Bell className="h-4.5 w-4.5" />
+                {notifications.filter(n => n.unread).length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-emerald-500 text-slate-950 rounded-full text-[9px] font-extrabold h-4 w-4 flex items-center justify-center animate-pulse">
+                    {notifications.filter(n => n.unread).length}
+                  </span>
+                )}
+              </button>
+              
+              {showNotificationsDropdown && (
+                <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-850 rounded-2xl p-4 shadow-2xl z-50 text-left animate-slideIn">
+                  <div className="flex justify-between items-center pb-2.5 border-b border-slate-800">
+                    <span className="text-xs font-bold text-slate-200">Alerts & Notifications</span>
+                    <button 
+                      onClick={() => setNotifications([])}
+                      className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                  <div className="mt-2.5 space-y-2.5 max-h-60 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <p className="text-[11px] text-slate-500 text-center py-4 italic">No new notifications</p>
+                    ) : (
+                      notifications.map((n, idx) => (
+                        <div 
+                          key={idx} 
+                          onClick={() => {
+                            setNotifications(prev => prev.map((item, i) => i === idx ? { ...item, unread: false } : item));
+                          }}
+                          className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                            n.unread 
+                              ? 'bg-slate-900 border-slate-700/80 hover:bg-slate-850' 
+                              : 'bg-slate-950/20 border-slate-900/50 opacity-60 hover:bg-slate-900/20'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-1.5">
+                              {n.unread && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />}
+                              <span className="text-xs font-bold text-slate-300">{n.title}</span>
+                            </div>
+                            <span className="text-[9px] text-slate-505 font-mono">
+                              {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-1 leading-relaxed pl-3">{n.message}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -753,6 +1104,58 @@ function Dashboard({ user, onLogout, actionLoading }) {
                   </div>
                 </div>
 
+              </div>
+
+              {/* Patient Compliance Section */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div className="pb-4 border-b border-slate-800">
+                  <h3 className="font-bold text-slate-200">Patient Compliance</h3>
+                  <p className="text-slate-500 text-xs">Patients who have missed their scheduled medication today</p>
+                </div>
+                {complianceAlerts.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic py-2">All patients are compliant today.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {complianceAlerts.map((alert) => (
+                      <div key={alert.id} className="bg-slate-950/40 border border-slate-800 p-4 rounded-xl flex flex-col justify-between gap-4">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="font-bold text-slate-200 text-sm">{alert.patient_name}</h4>
+                              <p className="text-xs text-slate-500">ID: {alert.patient_id_number || 'N/A'}</p>
+                            </div>
+                            <span className="bg-red-500/10 border border-red-500/20 text-red-400 font-mono text-[10px] px-2 py-0.5 rounded font-bold uppercase">
+                              Did not take medication
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-slate-400 border-t border-slate-800/40 pt-2.5">
+                            <div><strong>Phone:</strong> {alert.patient_phone || 'N/A'}</div>
+                            <div><strong>Gender:</strong> {alert.patient_gender || 'N/A'}</div>
+                            <div><strong>Address:</strong> {alert.patient_address || 'N/A'}</div>
+                            <div className="col-span-2"><strong>Next of Kin:</strong> {alert.patient_next_of_kin || 'N/A'} ({alert.patient_next_of_kin_phone || 'N/A'})</div>
+                          </div>
+                        </div>
+                        <div className="flex justify-end pt-2 border-t border-slate-800/40">
+                          {alert.visit_scheduled ? (
+                            <button
+                              disabled
+                              className="py-1.5 px-3 bg-slate-800 text-slate-500 text-xs font-bold rounded-lg cursor-not-allowed"
+                            >
+                              Scheduled
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleScheduleHomeVisit(alert)}
+                              className="py-1.5 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                            >
+                              Schedule Home Visit
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
             </div>
@@ -1011,161 +1414,332 @@ function Dashboard({ user, onLogout, actionLoading }) {
 
           {/* ================= PAGE: APPOINTMENTS ================= */}
           {activeTab === 'appointments' && (
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-                <div className="space-y-0.5">
-                  <h3 className="font-bold text-slate-200">Appointments List</h3>
-                  <p className="text-slate-500 text-xs">Calendar schedule of appointments</p>
+            <div className="space-y-6">
+              
+              {/* Group Toggle buttons */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="flex bg-slate-950/80 p-1 rounded-xl border border-slate-850">
+                  <button
+                    onClick={() => setAppointmentGroup('our-patients')}
+                    className={`py-1.5 px-4 rounded-lg font-bold text-xs transition-all duration-300 ${
+                      appointmentGroup !== 'new-patients'
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/10'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/20'
+                    }`}
+                  >
+                    From Our Patients ({appointments.filter(app => app.is_our_patient === true).length})
+                  </button>
+                  <button
+                    onClick={() => setAppointmentGroup('new-patients')}
+                    className={`py-1.5 px-4 rounded-lg font-bold text-xs transition-all duration-300 ${
+                      appointmentGroup === 'new-patients'
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/10'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/20'
+                    }`}
+                  >
+                    From New Patients ({appointments.filter(app => app.is_our_patient !== true).length})
+                  </button>
                 </div>
-                <button className="py-2 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors">
-                  <Plus className="h-4 w-4" /> Schedule Visit
-                </button>
+                
+                <p className="text-slate-500 text-xs font-medium">
+                  Showing incoming requests scheduled to {user.organization}
+                </p>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-800 text-slate-400 text-xs">
-                      <th className="py-3 px-4">Patient</th>
-                      <th className="py-3 px-4">Consultation Type</th>
-                      <th className="py-3 px-4">Clinician / Doctor</th>
-                      <th className="py-3 px-4">Date & Time</th>
-                      <th className="py-3 px-4">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/80">
-                    {appointmentsList.map((app) => (
-                      <tr key={app.id} className="hover:bg-slate-800/20 transition-colors">
-                        <td className="py-3.5 px-4 font-bold text-slate-200">{app.patient}</td>
-                        <td className="py-3.5 px-4 text-slate-300">{app.type}</td>
-                        <td className="py-3.5 px-4 text-slate-400">{app.doctor}</td>
-                        <td className="py-3.5 px-4 font-mono text-xs text-slate-300">
-                          {app.date} <span className="text-slate-500">at {app.time}</span>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                            app.status === 'Upcoming' ? 'bg-sky-500/10 text-sky-400' : 'bg-emerald-500/10 text-emerald-400'
-                          }`}>
-                            {app.status}
-                          </span>
-                        </td>
+              {/* Appointments List Panel */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                  <div>
+                    <h3 className="font-bold text-slate-200 text-base">
+                      {appointmentGroup === 'new-patients' ? 'External / New Patient Bookings' : 'Registered Patient Bookings'}
+                    </h3>
+                    <p className="text-slate-500 text-xs mt-1">
+                      {appointmentGroup === 'new-patients' 
+                        ? 'Requests from unregistered users or patients registered in other organizations.' 
+                        : 'Requests from patients registered under your organization.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
+                        <th className="py-3 px-4">Patient Details</th>
+                        <th className="py-3 px-4">Department & Clinician</th>
+                        <th className="py-3 px-4">Scheduled Date</th>
+                        <th className="py-3 px-4">Reason for Visit</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-center">Status Action</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/80">
+                      {loadingAppointments ? (
+                        <tr>
+                          <td colSpan="6" className="py-8 text-center text-slate-500">
+                            <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-400" />
+                            Loading appointments...
+                          </td>
+                        </tr>
+                      ) : (
+                        (appointmentGroup === 'new-patients' 
+                          ? appointments.filter(app => app.is_our_patient !== true) 
+                          : appointments.filter(app => app.is_our_patient === true)
+                        ).length === 0 ? (
+                          <tr>
+                            <td colSpan="6" className="py-8 text-center text-slate-500 text-xs">
+                              No appointments found in this group.
+                            </td>
+                          </tr>
+                        ) : (
+                          (appointmentGroup === 'new-patients' 
+                            ? appointments.filter(app => app.is_our_patient !== true) 
+                            : appointments.filter(app => app.is_our_patient === true)
+                          ).map((app) => {
+                            const isStaffAssigned = !!app.staff_to;
+                            let statusColor = 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
+                            if (app.status === 'approved') statusColor = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+                            if (app.status === 'rejected') statusColor = 'bg-red-500/10 text-red-400 border border-red-500/20';
+                            if (app.status === 'attended') statusColor = 'bg-sky-500/10 text-sky-400 border border-sky-500/20';
+                            
+                            return (
+                              <tr key={app.id} className="hover:bg-slate-800/20 transition-colors">
+                                <td className="py-3.5 px-4">
+                                  <span className="block font-bold text-slate-200">{app.fullname}</span>
+                                  <span className="block text-slate-500 text-xs mt-0.5">{app.phone_number || 'No contact phone'}</span>
+                                </td>
+                                <td className="py-3.5 px-4 text-xs">
+                                  <span className="block text-slate-300 font-semibold">{app.department_to}</span>
+                                  <span className="block text-slate-500 mt-0.5">
+                                    Recipient: {isStaffAssigned ? app.staff_to : 'Organization Admin (You)'}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 font-mono text-xs text-slate-300">
+                                  {app.arrival_date ? app.arrival_date.split('T')[0] : 'N/A'}
+                                  <span className="block text-slate-500 mt-0.5">at {app.arrival_time || 'anytime'}</span>
+                                </td>
+                                <td className="py-3.5 px-4 text-xs text-slate-400 max-w-xs truncate" title={app.reason}>
+                                  {app.reason}
+                                </td>
+                                <td className="py-3.5 px-4">
+                                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusColor}`}>
+                                    {app.status}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-center">
+                                  {isStaffAssigned ? (
+                                    <span className="text-[10px] text-slate-500 italic block max-w-[150px] mx-auto leading-tight">
+                                      Clinician Assigned: Only recipient can update status
+                                    </span>
+                                  ) : (
+                                    <div className="flex gap-2 justify-center items-center">
+                                      {app.status === 'pending approval' && (
+                                        <button
+                                          onClick={() => handleUpdateAppointmentStatus(app.id, 'approved')}
+                                          className="py-1 px-2.5 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-slate-950 border border-emerald-500/25 rounded text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                        >
+                                          Approve
+                                        </button>
+                                      )}
+                                      
+                                      {app.status === 'approved' && (
+                                        <button
+                                          onClick={() => handleUpdateAppointmentStatus(app.id, 'attended')}
+                                          className="py-1 px-2.5 bg-sky-500/10 hover:bg-sky-500 text-sky-400 hover:text-slate-950 border border-sky-500/25 rounded text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                        >
+                                          Attended
+                                        </button>
+                                      )}
+
+                                      {(app.status === 'pending approval' || app.status === 'approved') && (
+                                        <button
+                                          onClick={() => handleUpdateAppointmentStatus(app.id, 'rejected')}
+                                          className="py-1 px-2.5 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-slate-950 border border-red-500/25 rounded text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                        >
+                                          Reject
+                                        </button>
+                                      )}
+
+                                      {(app.status === 'attended' || app.status === 'rejected') && (
+                                        <span className="text-slate-500 text-[10px] italic">No actions available</span>
+                                      )}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
 
           {/* ================= PAGE: REFERRALS ================= */}
           {activeTab === 'referrals' && (
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-                <div className="space-y-0.5">
-                  <h3 className="font-bold text-slate-200">Patient Referrals</h3>
-                  <p className="text-slate-500 text-xs">Medical transfers across health networks</p>
+            <div className="space-y-6">
+              {/* Incoming Referrals */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                  <div className="space-y-0.5">
+                    <h3 className="font-bold text-slate-200">Incoming Referrals</h3>
+                    <p className="text-slate-500 text-xs">Patients referred to {user.organization}</p>
+                  </div>
+                  <button 
+                    onClick={() => { setIsReferralModalOpen(true); fetchOrganizations(); fetchOrganizationPatients(); }}
+                    className="py-2 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors"
+                  >
+                    <Plus className="h-4 w-4" /> Create Referral
+                  </button>
                 </div>
-                <button className="py-2 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors">
-                  <Plus className="h-4 w-4" /> Create Referral
-                </button>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 text-xs">
+                        <th className="py-3 px-4">Patient</th>
+                        <th className="py-3 px-4">Origin / Referrer</th>
+                        <th className="py-3 px-4">Department & Destination</th>
+                        <th className="py-3 px-4">Arrival Date / Time</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/80">
+                      {loadingReferrals ? (
+                        <tr>
+                          <td colSpan="6" className="py-8 text-center text-slate-500">
+                            <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-400" />
+                            Loading incoming referrals...
+                          </td>
+                        </tr>
+                      ) : referrals.incoming.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="py-8 text-center text-slate-500">
+                            No incoming referrals found.
+                          </td>
+                        </tr>
+                      ) : (
+                        referrals.incoming.map((ref) => (
+                          <tr key={ref.id} className="hover:bg-slate-800/20 transition-colors">
+                            <td className="py-3.5 px-4 font-bold text-slate-200">
+                              {ref.personel}
+                              <span className="block text-[10px] text-slate-500 font-mono mt-0.5">Ref ID: #{ref.id}</span>
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-300">
+                              <span className="block capitalize">{ref.referrer_role}</span>
+                              <span className="block text-xs text-slate-550">ID: {ref.referrer_id}</span>
+                            </td>
+                            <td className="py-3.5 px-4 text-xs">
+                              <span className="block text-slate-200">{ref.department_to}</span>
+                              <span className="block text-slate-400 mt-0.5">Recipient: {ref.staff_to || 'Organization Admin'}</span>
+                            </td>
+                            <td className="py-3.5 px-4 font-mono text-xs text-slate-350">
+                              {ref.arrival_date ? ref.arrival_date.split('T')[0] : 'N/A'} 
+                              <span className="block text-slate-500 mt-0.5">{ref.arrival_time || ''}</span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                ref.status ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
+                              }`}>
+                                {ref.status ? 'Attended' : 'Pending'}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              {!ref.status && !ref.staff_to ? (
+                                <button
+                                  onClick={() => handleUpdateReferralStatus(ref.id)}
+                                  className="py-1 px-2.5 bg-emerald-500 hover:bg-emerald-450 text-slate-950 text-xs font-bold rounded-lg transition-colors"
+                                >
+                                  Mark Attended
+                                </button>
+                              ) : !ref.status && ref.staff_to ? (
+                                <span className="text-slate-550 text-[10px] italic">Only designated staff can attend</span>
+                              ) : (
+                                <span className="text-emerald-500 text-xs font-semibold">Complete</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-800 text-slate-400 text-xs">
-                      <th className="py-3 px-4">Referral ID</th>
-                      <th className="py-3 px-4">Patient</th>
-                      <th className="py-3 px-4">Referral Source & Target</th>
-                      <th className="py-3 px-4">Department</th>
-                      <th className="py-3 px-4">Date</th>
-                      <th className="py-3 px-4">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/80">
-                    {referralsList.map((ref) => (
-                      <tr key={ref.id} className="hover:bg-slate-800/20 transition-colors">
-                        <td className="py-3.5 px-4 font-mono text-xs text-slate-300">{ref.id}</td>
-                        <td className="py-3.5 px-4 font-bold text-slate-200">{ref.patient}</td>
-                        <td className="py-3.5 px-4 text-xs">
-                          <span className="text-slate-400">{ref.from}</span>
-                          <ChevronRight className="inline-block h-3.5 w-3.5 text-slate-500 mx-1" />
-                          <span className="text-emerald-400">{ref.to}</span>
-                        </td>
-                        <td className="py-3.5 px-4 text-slate-300">{ref.department}</td>
-                        <td className="py-3.5 px-4 font-mono text-xs text-slate-500">{ref.date}</td>
-                        <td className="py-3.5 px-4">
-                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                            ref.status === 'Pending Review' ? 'bg-amber-500/10 text-amber-400 animate-pulse' : 'bg-emerald-500/10 text-emerald-400'
-                          }`}>
-                            {ref.status}
-                          </span>
-                        </td>
+              {/* Outgoing Referrals */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div className="pb-4 border-b border-slate-800">
+                  <h3 className="font-bold text-slate-200">Outgoing Referrals</h3>
+                  <p className="text-slate-500 text-xs">Patients you have referred to other health networks</p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 text-xs">
+                        <th className="py-3 px-4">Patient</th>
+                        <th className="py-3 px-4">Target Organization</th>
+                        <th className="py-3 px-4">Department & Destination</th>
+                        <th className="py-3 px-4">Arrival Date / Time</th>
+                        <th className="py-3 px-4">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/80">
+                      {loadingReferrals ? (
+                        <tr>
+                          <td colSpan="5" className="py-8 text-center text-slate-500">
+                            <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-400" />
+                            Loading outgoing referrals...
+                          </td>
+                        </tr>
+                      ) : referrals.outgoing.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="py-8 text-center text-slate-500">
+                            No outgoing referrals found.
+                          </td>
+                        </tr>
+                      ) : (
+                        referrals.outgoing.map((ref) => (
+                          <tr key={ref.id} className="hover:bg-slate-800/20 transition-colors">
+                            <td className="py-3.5 px-4 font-bold text-slate-200">
+                              {ref.personel}
+                              <span className="block text-[10px] text-slate-500 font-mono mt-0.5">Ref ID: #{ref.id}</span>
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-300 font-semibold">
+                              {ref.organization_to}
+                            </td>
+                            <td className="py-3.5 px-4 text-xs">
+                              <span className="block text-slate-200">{ref.department_to}</span>
+                              <span className="block text-slate-400 mt-0.5">Recipient: {ref.staff_to || 'Organization Admin'}</span>
+                            </td>
+                            <td className="py-3.5 px-4 font-mono text-xs text-slate-350">
+                              {ref.arrival_date ? ref.arrival_date.split('T')[0] : 'N/A'}
+                              <span className="block text-slate-500 mt-0.5">{ref.arrival_time || ''}</span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                ref.status ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
+                              }`}>
+                                {ref.status ? 'Attended' : 'Pending'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
 
           {/* ================= PAGE: CHAT ROOM ================= */}
           {activeTab === 'chat' && (
-            <div className="bg-slate-900/60 border border-slate-800 rounded-3xl h-[calc(100vh-14rem)] flex flex-col justify-between overflow-hidden">
-              
-              {/* Message Header info */}
-              <div className="p-4 border-b border-slate-800/80 bg-slate-950/20 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-2 w-2 bg-emerald-500 rounded-full animate-ping" />
-                  <span className="text-xs text-slate-300 font-semibold">Active staff discussion channel</span>
-                </div>
-                <span className="text-slate-500 text-xs font-mono">Channel: #general-staff</span>
-              </div>
-
-              {/* Message History */}
-              <div className="flex-1 p-6 space-y-4 overflow-y-auto bg-slate-950/10">
-                {chatMessages.map((msg) => {
-                  const isSelf = msg.sender === 'You';
-                  return (
-                    <div 
-                      key={msg.id} 
-                      className={`flex flex-col max-w-[70%] space-y-1 ${isSelf ? 'ml-auto items-end' : 'mr-auto items-start'}`}
-                    >
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-xs font-bold text-slate-300">{msg.sender}</span>
-                        <span className="text-[10px] text-slate-500">{msg.role}</span>
-                      </div>
-                      <div className={`p-3.5 rounded-2xl text-sm leading-relaxed ${
-                        isSelf 
-                          ? 'bg-gradient-to-tr from-emerald-500 to-teal-500 text-slate-950 font-medium rounded-tr-none' 
-                          : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'
-                      }`}>
-                        {msg.text}
-                      </div>
-                      <span className="text-[9px] text-slate-600 font-mono">{msg.time}</span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Message Input Box */}
-              <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-800 bg-slate-900 flex gap-3">
-                <input
-                  type="text"
-                  placeholder="Type a clinical update or query..."
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  className="flex-1 bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-all duration-300"
-                />
-                <button
-                  type="submit"
-                  className="h-12 w-12 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 hover:brightness-110 active:scale-95 transition-all duration-300"
-                >
-                  <Send className="h-5 w-5" />
-                </button>
-              </form>
-
-            </div>
+            <ChatRoom user={user} socket={socket} />
           )}
 
         </section>
@@ -2167,6 +2741,327 @@ function Dashboard({ user, onLogout, actionLoading }) {
           </div>
         </div>
       )}
+      {/* ================= CREATE REFERRAL MODAL ================= */}
+      {isReferralModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={closeReferralModal}
+              className="absolute top-4 right-4 text-slate-550 hover:text-slate-350 transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <h2 className="text-xl font-bold text-white">Create New Referral</h2>
+              <p className="text-slate-400 text-xs mt-1">Initiate a transfer to another medical facility or staff member.</p>
+            </div>
+
+            {/* Error & Success Notification */}
+            {referralModalError && (
+              <div className="bg-red-950/40 border border-red-500/25 text-red-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{referralModalError}</span>
+              </div>
+            )}
+            {referralModalSuccess && (
+              <div className="bg-emerald-950/40 border border-emerald-500/25 text-emerald-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{referralModalSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleCreateReferral} className="space-y-4">
+              {/* Patient Selector */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs text-slate-400 font-semibold">Select Patient *</label>
+                  <input 
+                    type="text" 
+                    placeholder="Search patient by name..." 
+                    value={patientQuery}
+                    onChange={e => setPatientQuery(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-lg py-1 px-2.5 text-xs text-slate-300 placeholder-slate-600 outline-none focus:border-emerald-500 w-48 transition-colors"
+                  />
+                </div>
+                <select
+                  required
+                  value={referralForm.personel}
+                  onChange={(e) => setReferralForm({...referralForm, personel: e.target.value})}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                >
+                  <option value="">-- Choose Patient --</option>
+                  {filteredPatients.map(p => (
+                    <option key={p.id} value={`${p.fullname} (${p.id_number})`}>
+                      {p.fullname} ({p.id_number})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Destination Organization */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs text-slate-400 font-semibold">Target Organization *</label>
+                    <input 
+                      type="text" 
+                      placeholder="Search organization..." 
+                      value={orgQuery}
+                      onChange={e => setOrgQuery(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-lg py-1 px-2.5 text-xs text-slate-300 placeholder-slate-600 outline-none focus:border-emerald-500 w-32 transition-colors"
+                    />
+                  </div>
+                  <select
+                    required
+                    value={referralForm.organization_to}
+                    onChange={(e) => handleOrgChange(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                  >
+                    <option value="">-- Choose Organization --</option>
+                    {filteredOrgs.map(org => (
+                      <option key={org} value={org}>{org}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Target Department */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs text-slate-400 font-semibold">Department To *</label>
+                    <input 
+                      type="text" 
+                      placeholder="Search department..." 
+                      value={deptQuery}
+                      onChange={e => setDeptQuery(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-lg py-1 px-2.5 text-xs text-slate-300 placeholder-slate-600 outline-none focus:border-emerald-500 w-32 transition-colors"
+                    />
+                  </div>
+                  <select
+                    required
+                    value={referralForm.department_to}
+                    onChange={(e) => setReferralForm({...referralForm, department_to: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                  >
+                    {filteredDepts.map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Target Staff Member (Optional) */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs text-slate-400 font-semibold">Target Clinician / Staff member (Optional)</label>
+                  <input 
+                    type="text" 
+                    placeholder="Search staff by name..." 
+                    value={staffQuery}
+                    onChange={e => setStaffQuery(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-lg py-1 px-2.5 text-xs text-slate-300 placeholder-slate-600 outline-none focus:border-emerald-500 w-48 transition-colors"
+                  />
+                </div>
+                <select
+                  value={referralForm.staff_to}
+                  onChange={(e) => setReferralForm({...referralForm, staff_to: e.target.value})}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                >
+                  <option value="">-- Defaults to Organization Admin --</option>
+                  {filteredStaff.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.fullname} ({s.staff_role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Arrival Date */}
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-semibold">Estimated Arrival Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={referralForm.arrival_date}
+                    onChange={(e) => setReferralForm({...referralForm, arrival_date: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+
+                {/* Arrival Time */}
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-semibold">Estimated Arrival Time</label>
+                  <input
+                    type="time"
+                    value={referralForm.arrival_time}
+                    onChange={(e) => setReferralForm({...referralForm, arrival_time: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Referral Reason */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold">Reason for Referral *</label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="State the symptoms, diagnosis, or reason for transfer..."
+                  value={referralForm.reason}
+                  onChange={(e) => setReferralForm({...referralForm, reason: e.target.value})}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors resize-none"
+                />
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-4 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={closeReferralModal}
+                  className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={referralModalLoading}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  {referralModalLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+                  {referralModalLoading ? 'Creating Referral...' : 'Create Referral'}
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= SCHEDULE HOME VISIT MODAL ================= */}
+      {isScheduleVisitModalOpen && selectedAlertForVisit && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => { setIsScheduleVisitModalOpen(false); setSelectedAlertForVisit(null); }}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <h2 className="text-xl font-bold text-white">Schedule Home Visit</h2>
+              <p className="text-slate-400 text-xs mt-1">Assign a community health worker to visit {selectedAlertForVisit.patient_name}.</p>
+            </div>
+
+            <div className="space-y-4">
+              {/* CHW Selection */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold">Community Health Worker *</label>
+                <select
+                  value={selectedChwId}
+                  onChange={(e) => setSelectedChwId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                >
+                  <option value="">Select Community Health Worker</option>
+                  {chws.map((chw) => (
+                    <option key={chw.id} value={chw.id}>
+                      {chw.fullname} (ID: {chw.employee_id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Visit Date */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold">Visit Date *</label>
+                <input
+                  type="date"
+                  value={visitDate}
+                  onChange={(e) => setVisitDate(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                />
+              </div>
+
+              {/* Visit Reason */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold">Reason for Visit</label>
+                <textarea
+                  rows={3}
+                  value={visitReason}
+                  onChange={(e) => setVisitReason(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors resize-none"
+                  placeholder="Reason for visit..."
+                />
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-4 pt-4 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => { setIsScheduleVisitModalOpen(false); setSelectedAlertForVisit(null); }}
+                className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              {selectedChwId && (
+                <button
+                  type="button"
+                  onClick={submitScheduleHomeVisit}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all"
+                >
+                  Schedule
+                </button>
+              )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Toast Container */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 max-w-sm w-full pointer-events-none">
+        {toasts.map(toast => (
+          <div key={toast.id} className="pointer-events-auto bg-slate-900/90 border border-slate-800 backdrop-blur-md rounded-2xl p-4 shadow-2xl flex items-start gap-3.5 animate-slideIn">
+            <div className={`p-2 rounded-xl shrink-0 ${
+              toast.type === 'message' 
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                : toast.type === 'referral' 
+                  ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20'
+                  : toast.type === 'compliance_alert'
+                    ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                    : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+            }`}>
+              {toast.type === 'message' ? (
+                <MessageSquare className="h-4 w-4" />
+              ) : toast.type === 'referral' ? (
+                <Activity className="h-4 w-4" />
+              ) : toast.type === 'compliance_alert' ? (
+                <AlertTriangle className="h-4 w-4" />
+              ) : (
+                <Calendar className="h-4 w-4" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-bold text-slate-200">{toast.title}</h4>
+              <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">{toast.message}</p>
+            </div>
+            <button 
+              onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+              className="text-slate-500 hover:text-slate-300 transition-colors text-sm font-bold align-top leading-none"
+            >
+              &times;
+            </button>
+          </div>
+        ))}
+      </div>
+
     </div>
   );
 }
