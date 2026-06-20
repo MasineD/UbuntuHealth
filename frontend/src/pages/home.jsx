@@ -122,7 +122,8 @@ function Home({
     setBookingLoading(true);
     try {
       const res = await api.post('/auth/appointments', bookingForm);
-      setBookingSuccess(res.data.message || 'Appointment requested successfully!');
+      const keyMsg = res.data.appointment?.appointment_key ? ` Verification Key: ${res.data.appointment.appointment_key}` : '';
+      setBookingSuccess((res.data.message || 'Appointment requested successfully!') + keyMsg);
       
       // Reset form (keep patient details if logged in)
       setBookingForm({

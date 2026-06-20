@@ -204,7 +204,8 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
         phone_number: user.phone_number,
         ...bookingForm
       });
-      setBookingSuccess(res.data.message || 'Appointment requested successfully!');
+      const keyMsg = res.data.appointment?.appointment_key ? ` Verification Key: ${res.data.appointment.appointment_key}` : '';
+      setBookingSuccess((res.data.message || 'Appointment requested successfully!') + keyMsg);
       // Reset form
       setBookingForm({
         organization_to: '',
@@ -741,20 +742,21 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
                       <th className="py-3 px-4">Department & Clinician</th>
                       <th className="py-3 px-4">Estimated Arrival</th>
                       <th className="py-3 px-4">Reason</th>
+                      <th className="py-3 px-4">Verification Key</th>
                       <th className="py-3 px-4">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80">
                     {loadingReferrals ? (
                       <tr>
-                        <td colSpan="6" className="py-8 text-center text-slate-500">
+                        <td colSpan="7" className="py-8 text-center text-slate-500">
                           <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-400" />
                           Loading referrals...
                         </td>
                       </tr>
                     ) : referralsList.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="py-8 text-center text-slate-500">
+                        <td colSpan="7" className="py-8 text-center text-slate-500">
                           No referrals registered for you.
                         </td>
                       </tr>
@@ -772,6 +774,9 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
                             <span className="block text-slate-500 mt-0.5">{ref.arrival_time || ''}</span>
                           </td>
                           <td className="py-3.5 px-4 text-xs text-slate-400 max-w-xs truncate">{ref.reason}</td>
+                          <td className="py-3.5 px-4 font-mono text-xs text-emerald-400 font-bold">
+                            {ref.referral_key || 'N/A'}
+                          </td>
                           <td className="py-3.5 px-4">
                             <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                               ref.status ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
@@ -813,20 +818,21 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
                       <th className="py-3 px-4">Department & Staff</th>
                       <th className="py-3 px-4">Scheduled Date</th>
                       <th className="py-3 px-4">Reason</th>
+                      <th className="py-3 px-4">Verification Key</th>
                       <th className="py-3 px-4 text-center">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80">
                     {loadingAppointments ? (
                       <tr>
-                        <td colSpan="6" className="py-8 text-center text-slate-500">
+                        <td colSpan="7" className="py-8 text-center text-slate-500">
                           <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-400" />
                           Loading appointments...
                         </td>
                       </tr>
                     ) : appointments.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="py-8 text-center text-slate-500 text-xs">
+                        <td colSpan="7" className="py-8 text-center text-slate-500 text-xs">
                           You haven't requested any appointments yet. Click "Book Appointment" to start.
                         </td>
                       </tr>
@@ -850,6 +856,9 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
                               <span className="block text-slate-500 mt-0.5">{app.arrival_time || 'No preferred time'}</span>
                             </td>
                             <td className="py-3.5 px-4 text-xs text-slate-400 max-w-xs truncate">{app.reason}</td>
+                            <td className="py-3.5 px-4 font-mono text-xs text-emerald-400 font-bold">
+                              {app.appointment_key || 'N/A'}
+                            </td>
                             <td className="py-3.5 px-4 text-center">
                               <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusColor}`}>
                                 {app.status}

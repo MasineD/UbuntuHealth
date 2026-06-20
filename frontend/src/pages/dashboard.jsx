@@ -173,7 +173,12 @@ function Dashboard({ user, onLogout, actionLoading }) {
 
   const handleUpdateAppointmentStatus = async (appId, status) => {
     try {
-      await api.put(`/auth/appointments/${appId}/status`, { status });
+      let key = undefined;
+      if (status === 'attended') {
+        key = prompt('Please enter the Appointment Verification Key:');
+        if (key === null) return; // cancelled
+      }
+      await api.put(`/auth/appointments/${appId}/status`, { status, key });
       fetchAppointments();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to update appointment status');
@@ -711,7 +716,9 @@ function Dashboard({ user, onLogout, actionLoading }) {
 
   const handleUpdateReferralStatus = async (refId) => {
     try {
-      await api.put(`/auth/referrals/${refId}/status`);
+      const key = prompt('Please enter the Referral Verification Key:');
+      if (key === null) return; // cancelled
+      await api.put(`/auth/referrals/${refId}/status`, { key });
       fetchReferrals();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to update referral status');
