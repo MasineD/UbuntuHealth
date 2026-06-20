@@ -53,7 +53,7 @@ router.post('/appointments', async (req, res) => {
         // Enforce: An appointment cannot be made to a CHW
         if (staff_to) {
             const isChw = await pool.query(
-                'SELECT id FROM users.comm_health_workers WHERE id::text = $1 OR employee_id = $1', 
+                'SELECT id FROM users.comm_health_workers WHERE employee_id = $1', 
                 [staff_to]
             );
             if (isChw.rows.length > 0) {
