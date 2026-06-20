@@ -14,6 +14,7 @@ const api = axios.create({
 function Dashboard({ user, onLogout, actionLoading }) {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'patients' | 'appointments' | 'referrals' | 'chat'
   const [searchQuery, setSearchQuery] = useState('');
+  const [staffSearchQuery, setStaffSearchQuery] = useState('');
   
   // Chat Room state simulation
   const [chatMessages, setChatMessages] = useState([
@@ -302,9 +303,107 @@ function Dashboard({ user, onLogout, actionLoading }) {
     }));
   };
 
+  // Clinical Staff state
+  const [staff, setStaff] = useState([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
+  const [staffModalLoading, setStaffModalLoading] = useState(false);
+  const [staffModalError, setStaffModalError] = useState('');
+  const [staffModalSuccess, setStaffModalSuccess] = useState('');
+
+  const [staffForm, setStaffForm] = useState({
+    employee_id: '',
+    fullname: '',
+    id_number: '',
+    gender: 'Male',
+    role: 'doctor/nurse',
+    password: '',
+    email: '',
+    phone_number: '',
+    house_number: '',
+    surbub: '',
+    municipality: '',
+    city: ''
+  });
+
+  const fetchStaff = async () => {
+    setLoadingStaff(true);
+    try {
+      const response = await api.get('/auth/staff');
+      if (response.data && response.data.staff) {
+        setStaff(response.data.staff);
+      }
+    } catch (err) {
+      console.error('Error fetching clinical staff:', err);
+    } finally {
+      setLoadingStaff(false);
+    }
+  };
+
+  const handleRegisterStaff = async (e) => {
+    e.preventDefault();
+    setStaffModalError('');
+    setStaffModalSuccess('');
+    
+    if (staffForm.id_number.length !== 13) {
+      setStaffModalError('National ID must be exactly 13 digits');
+      return;
+    }
+    if (staffForm.phone_number.length !== 10) {
+      setStaffModalError('Phone number must be exactly 10 digits');
+      return;
+    }
+
+    setStaffModalLoading(true);
+    try {
+      const response = await api.post('/auth/register-staff', staffForm);
+      if (response.data && response.data.staff) {
+        setStaffModalSuccess('Clinical staff member registered successfully!');
+        
+        // Add new staff member to state list
+        const newStaff = response.data.staff;
+        setStaff([
+          ...staff,
+          {
+            ...staffForm,
+            id: newStaff.id,
+            staff_role: newStaff.role
+          }
+        ]);
+
+        // Reset form
+        setStaffForm({
+          employee_id: '',
+          fullname: '',
+          id_number: '',
+          gender: 'Male',
+          role: 'doctor/nurse',
+          password: '',
+          email: '',
+          phone_number: '',
+          house_number: '',
+          surbub: '',
+          municipality: '',
+          city: ''
+        });
+
+        // Close modal after 1.5s
+        setTimeout(() => {
+          setIsStaffModalOpen(false);
+          setStaffModalSuccess('');
+        }, 1500);
+      }
+    } catch (err) {
+      setStaffModalError(err.response?.data?.message || 'Failed to register clinical staff member');
+    } finally {
+      setStaffModalLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchPatients();
     fetchChws();
+    fetchStaff();
   }, []);
 
   // Modal State
@@ -413,6 +512,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
     { id: 'overview', name: 'Overview', icon: LayoutDashboard },
     { id: 'patients', name: 'Patients', icon: Users },
     { id: 'chws', name: 'Comm. Health Workers', icon: UserIcon },
+    { id: 'staff', name: 'Clinical Staff', icon: ShieldCheck },
     { id: 'appointments', name: 'Appointments', icon: Calendar },
     { id: 'referrals', name: 'Referrals', icon: ArrowLeftRight },
     { id: 'chat', name: 'Chat Room', icon: MessageSquare }
@@ -788,6 +888,120 @@ function Dashboard({ user, onLogout, actionLoading }) {
                           <td className="py-3.5 px-4 font-mono text-xs text-slate-500">{chw.id_number}</td>
                         </tr>
                       ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ================= PAGE: CLINICAL STAFF ================= */}
+          {activeTab === 'staff' && (
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-slate-800">
+                <div className="space-y-0.5">
+                  <h3 className="font-bold text-slate-200">Clinical Staff</h3>
+                  <p className="text-slate-500 text-xs">List of registered clinical staff members in your organization</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder="Search name, ID, specialty..."
+                      value={staffSearchQuery}
+                      onChange={(e) => setStaffSearchQuery(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 w-60 transition-all"
+                    />
+                  </div>
+                  <button 
+                    onClick={() => setIsStaffModalOpen(true)}
+                    className="py-2 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors"
+                  >
+                    <Plus className="h-4 w-4" /> Add Staff Member
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-slate-400 text-xs">
+                      <th className="py-3 px-4">Name & Employee ID</th>
+                      <th className="py-3 px-4">Role/Specialty</th>
+                      <th className="py-3 px-4">Gender & Age</th>
+                      <th className="py-3 px-4">Contact Info</th>
+                      <th className="py-3 px-4">Location</th>
+                      <th className="py-3 px-4">National ID</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/80">
+                    {loadingStaff ? (
+                      <tr>
+                        <td colSpan="6" className="py-8 text-center text-slate-500">
+                          <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-400" />
+                          Loading clinical staff...
+                        </td>
+                      </tr>
+                    ) : staff.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="py-8 text-center text-slate-500">
+                          No clinical staff members found. Click "Add Staff Member" to register one.
+                        </td>
+                      </tr>
+                    ) : staff.filter(cs => {
+                      const query = staffSearchQuery.toLowerCase();
+                      return (
+                        cs.fullname?.toLowerCase().includes(query) ||
+                        cs.employee_id?.toLowerCase().includes(query) ||
+                        cs.staff_role?.toLowerCase().includes(query)
+                      );
+                    }).length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="py-8 text-center text-slate-500">
+                          No clinical staff matched your search query.
+                        </td>
+                      </tr>
+                    ) : (
+                      staff
+                        .filter(cs => {
+                          const query = staffSearchQuery.toLowerCase();
+                          return (
+                            cs.fullname?.toLowerCase().includes(query) ||
+                            cs.employee_id?.toLowerCase().includes(query) ||
+                            cs.staff_role?.toLowerCase().includes(query)
+                          );
+                        })
+                        .map((cs) => (
+                          <tr key={cs.id} className="hover:bg-slate-800/20 transition-colors">
+                            <td className="py-3.5 px-4 font-bold text-slate-200">
+                              {cs.fullname}
+                              <span className="block text-[10px] text-slate-500 font-mono mt-0.5">Emp ID: {cs.employee_id}</span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                cs.staff_role === 'doctor/nurse' 
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                  : cs.staff_role === 'social worker'
+                                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                  : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                              }`}>
+                                {cs.staff_role}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-400">
+                              {cs.gender}, {calculateAgeFromId(cs.id_number)}
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-350">
+                              <span className="block text-slate-200">{cs.phone_number}</span>
+                              <span className="block text-xs text-slate-500">{cs.email || 'No email provided'}</span>
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-400">
+                              {cs.house_number} {cs.surbub}, {cs.city}
+                            </td>
+                            <td className="py-3.5 px-4 font-mono text-xs text-slate-500">{cs.id_number}</td>
+                          </tr>
+                        ))
                     )}
                   </tbody>
                 </table>
@@ -1386,6 +1600,224 @@ function Dashboard({ user, onLogout, actionLoading }) {
                 >
                   {chwModalLoading && <Loader2 className="h-5 w-5 animate-spin" />}
                   {chwModalLoading ? 'Registering CHW...' : 'Register CHW'}
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= CLINICAL STAFF REGISTRATION MODAL ================= */}
+      {isStaffModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => { setIsStaffModalOpen(false); setStaffModalError(''); setStaffModalSuccess(''); }}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <h2 className="text-xl font-bold text-white">Register New Clinical Staff Member</h2>
+              <p className="text-slate-400 text-xs mt-1">Provide all details to add the clinical staff member to the organization.</p>
+            </div>
+
+            {/* Error & Success Notification */}
+            {staffModalError && (
+              <div className="bg-red-950/40 border border-red-500/25 text-red-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{staffModalError}</span>
+              </div>
+            )}
+            {staffModalSuccess && (
+              <div className="bg-emerald-950/40 border border-emerald-500/25 text-emerald-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{staffModalSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleRegisterStaff} className="space-y-6">
+              
+              {/* Group 1: General Info */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">General Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Full Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Firstname Lastname"
+                      value={staffForm.fullname}
+                      onChange={(e) => setStaffForm({...staffForm, fullname: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-semibold">Gender *</label>
+                      <select
+                        value={staffForm.gender}
+                        onChange={(e) => setStaffForm({...staffForm, gender: e.target.value})}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                      >
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-semibold">National ID *</label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={13}
+                        placeholder="13-digit ID"
+                        value={staffForm.id_number}
+                        onChange={(e) => setStaffForm({...staffForm, id_number: e.target.value.replace(/\D/g, '')})}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Employee ID *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. DOC-301"
+                      value={staffForm.employee_id}
+                      onChange={(e) => setStaffForm({...staffForm, employee_id: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Role/Specialty *</label>
+                    <select
+                      value={staffForm.role}
+                      onChange={(e) => setStaffForm({...staffForm, role: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                    >
+                      <option value="doctor/nurse">Doctor / Nurse</option>
+                      <option value="social worker">Social Worker</option>
+                      <option value="therapist">Therapist</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Phone Number *</label>
+                    <input
+                      type="tel"
+                      required
+                      maxLength={10}
+                      placeholder="10-digit phone"
+                      value={staffForm.phone_number}
+                      onChange={(e) => setStaffForm({...staffForm, phone_number: e.target.value.replace(/\D/g, '')})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Email Address</label>
+                    <input
+                      type="email"
+                      placeholder="staff@hospital.com"
+                      value={staffForm.email}
+                      onChange={(e) => setStaffForm({...staffForm, email: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Portal Password *</label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Choose password"
+                      value={staffForm.password}
+                      onChange={(e) => setStaffForm({...staffForm, password: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Group 2: Address Info */}
+              <div className="space-y-4 pt-2">
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Address Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">House Number *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 14B"
+                      value={staffForm.house_number}
+                      onChange={(e) => setStaffForm({...staffForm, house_number: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Suburb *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Melville"
+                      value={staffForm.surbub}
+                      onChange={(e) => setStaffForm({...staffForm, surbub: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Municipality *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. City of Joburg"
+                      value={staffForm.municipality}
+                      onChange={(e) => setStaffForm({...staffForm, municipality: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">City *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Johannesburg"
+                      value={staffForm.city}
+                      onChange={(e) => setStaffForm({...staffForm, city: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-4 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => { setIsStaffModalOpen(false); setStaffModalError(''); setStaffModalSuccess(''); }}
+                  className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={staffModalLoading}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  {staffModalLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+                  {staffModalLoading ? 'Registering Staff...' : 'Register Staff Member'}
                 </button>
               </div>
 
