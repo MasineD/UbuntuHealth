@@ -55,7 +55,7 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
 
           const newToast = {
             id: Date.now() + Math.random(),
-            type: data.type === 'referral_created' ? 'referral' : 'appointment',
+            type: data.type === 'medication' ? 'medication' : (data.type === 'referral_created' ? 'referral' : 'appointment'),
             title: data.title,
             message: data.message
           };
@@ -64,6 +64,10 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
           setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== newToast.id));
           }, 5000);
+
+          if (data.type === 'medication') {
+            fetchMedicationLogs();
+          }
         });
 
         socketInstance.on('new-message', (msg) => {
@@ -230,10 +234,37 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
     }
   };
 
+  const [medicationLogs, setMedicationLogs] = useState([]);
+
+  const fetchMedicationLogs = async () => {
+    try {
+      const response = await api.get('/auth/patients/my-medications');
+      if (response.data && response.data.medicationLogs) {
+        setMedicationLogs(response.data.medicationLogs);
+      }
+    } catch (err) {
+      console.error('Error fetching medication logs:', err);
+    }
+  };
+
+  const handleToggleMedication = async (logId) => {
+    try {
+      const response = await api.post(`/auth/patients/my-medications/${logId}/toggle`);
+      if (response.data) {
+        setMedicationLogs(prev => prev.map(log => 
+          log.id === logId ? { ...log, taken: response.data.taken } : log
+        ));
+      }
+    } catch (err) {
+      console.error('Error toggling medication log:', err);
+    }
+  };
+
   useEffect(() => {
     fetchReferrals();
     fetchAppointments();
     fetchOrganizations();
+    fetchMedicationLogs();
   }, []);
   
   // Simulated Patient Routines
@@ -491,7 +522,7 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
                 {/* Left: Routines check list */}
                 <div className="md:col-span-7 bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-                    <h3 className="font-bold text-slate-200">Today’s Health Checklist</h3>
+                    <h3 className="font-bold text-slate-200">Routines for Today</h3>
                     <button 
                       onClick={() => setActiveTab('routines')}
                       className="text-xs text-teal-400 hover:text-teal-300 font-semibold"
@@ -501,22 +532,25 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
                   </div>
 
                   <div className="space-y-3">
-                    {routines.slice(0, 3).map((r) => (
-                      <div key={r.id} className="p-3 bg-slate-950/40 border border-slate-800/60 rounded-xl flex items-center justify-between">
+                    {/* Render active medication logs */}
+                    {medicationLogs.map((log) => (
+                      <div key={`med-${log.id}`} className="p-3 bg-rose-500/5 border border-rose-500/10 rounded-xl flex items-center justify-between">
                         <div>
-                          <span className="text-xs font-mono text-slate-500 block">{r.time}</span>
-                          <span className="text-xs font-medium text-slate-300">{r.task}</span>
+                          <span className="text-xs font-medium text-slate-200">Take Medication</span>
+                          <span className="text-[10px] text-slate-400 block mt-0.5">Scheduled for {log.scheduled_time ? log.scheduled_time.substring(0, 5) : ''} ({log.medication_time})</span>
                         </div>
-                        <button
-                          onClick={() => toggleRoutineStatus(r.id)}
-                          className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${
-                            r.status === 'Completed' 
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                              : 'bg-slate-950 hover:bg-slate-900 border-slate-800 text-slate-400'
-                          }`}
-                        >
-                          {r.status}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id={`chk-med-${log.id}`}
+                            checked={log.taken}
+                            onChange={() => handleToggleMedication(log.id)}
+                            className="w-4 h-4 accent-teal-500 rounded border-slate-700 bg-slate-950 text-teal-500 focus:ring-teal-500 cursor-pointer"
+                          />
+                          <label htmlFor={`chk-med-${log.id}`} className="text-xs text-slate-400 select-none cursor-pointer">
+                            {log.taken ? 'Taken' : 'Mark Taken'}
+                          </label>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -586,6 +620,36 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
               </div>
 
               <div className="divide-y divide-slate-800/80">
+                {/* Render active medication logs */}
+                {medicationLogs.map((log) => (
+                  <div key={`med-tab-${log.id}`} className="py-4 flex items-center justify-between first:pt-0 last:pb-0">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4.5 w-4.5 text-rose-400" />
+                        <span className="font-bold text-slate-200 text-sm">
+                          {log.scheduled_time ? log.scheduled_time.substring(0, 5) : ''}
+                        </span>
+                        <span className="bg-rose-500/10 border border-rose-500/20 text-rose-400 font-mono text-[9px] px-1.5 py-0.2 rounded font-bold uppercase">
+                          {log.medication_time}
+                        </span>
+                      </div>
+                      <p className="text-slate-400 text-xs pl-6">Take Medication</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id={`chk-med-tab-${log.id}`}
+                        checked={log.taken}
+                        onChange={() => handleToggleMedication(log.id)}
+                        className="w-4 h-4 accent-teal-500 rounded border-slate-700 bg-slate-950 text-teal-500 focus:ring-teal-500 cursor-pointer"
+                      />
+                      <label htmlFor={`chk-med-tab-${log.id}`} className="text-xs text-slate-400 select-none cursor-pointer">
+                        {log.taken ? 'Taken' : 'Mark Taken'}
+                      </label>
+                    </div>
+                  </div>
+                ))}
+
                 {routines.map((r) => (
                   <div key={r.id} className="py-4 flex items-center justify-between first:pt-0 last:pb-0">
                     <div className="space-y-1">
@@ -1010,9 +1074,19 @@ function PatientDashboard({ user, onLogout, actionLoading }) {
                 ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20' 
                 : toast.type === 'referral' 
                   ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                  : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+                  : toast.type === 'medication'
+                    ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                    : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
             }`}>
-              {toast.type === 'message' ? <MessageSquare className="h-4 w-4" /> : toast.type === 'referral' ? <Activity className="h-4 w-4" /> : <Calendar className="h-4 w-4" />}
+              {toast.type === 'message' ? (
+                <MessageSquare className="h-4 w-4" />
+              ) : toast.type === 'referral' ? (
+                <Activity className="h-4 w-4" />
+              ) : toast.type === 'medication' ? (
+                <Clock className="h-4 w-4" />
+              ) : (
+                <Calendar className="h-4 w-4" />
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <h4 className="text-xs font-bold text-slate-200">{toast.title}</h4>

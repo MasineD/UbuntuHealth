@@ -90,13 +90,12 @@ router.get('/patients', protect, async (req, res) => {
     }
 });
 
-// Get health record for a specific patient (Admin and Clinical Staff)
+// Get health record for a specific patient (Admin, Clinical Staff, and Patient themselves)
 router.get('/patients/:id/health-record', protect, async (req, res) => {
-    if (req.user.role !== 'admin' && req.user.role !== 'staff') {
-        return res.status(403).json({ message: 'Only administrative or clinical staff can view patient health records' });
-    }
-
     const patientId = req.params.id;
+    if (req.user.role !== 'admin' && req.user.role !== 'staff' && (req.user.role !== 'patient' || req.user.id.toString() !== patientId.toString())) {
+        return res.status(403).json({ message: 'Only administrative staff, clinical staff, or the patient themselves can view health records' });
+    }
     try {
         // Get or create health record on-demand (to support pre-existing patients without one)
         let recordRes = await pool.query('SELECT * FROM patients.health_records WHERE patient_id = $1', [patientId]);
@@ -318,6 +317,48 @@ router.get('/organization-patients', protect, async (req, res) => {
         return res.json({ patients: patientsRes.rows });
     } catch (error) {
         console.error('Error fetching organization patients:', error.message);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Get today's medication logs for the logged-in patient
+router.get('/patients/my-medications', protect, async (req, res) => {
+    if (req.user.role !== 'patient') {
+        return res.status(403).json({ message: 'Only patients can fetch their own medication logs' });
+    }
+    try {
+        const result = await pool.query(
+            `SELECT id, patient_id, medication_time, scheduled_time::text, taken, date::text 
+             FROM patients.medication_logs 
+             WHERE patient_id = $1 AND date = CURRENT_DATE
+             ORDER BY scheduled_time ASC`,
+            [req.user.id]
+        );
+        return res.json({ medicationLogs: result.rows });
+    } catch (error) {
+        console.error('Error fetching my-medications:', error.message);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Toggle today's medication log taken status
+router.post('/patients/my-medications/:id/toggle', protect, async (req, res) => {
+    if (req.user.role !== 'patient') {
+        return res.status(403).json({ message: 'Only patients can update their medication status' });
+    }
+    const logId = req.params.id;
+    try {
+        // Verify ownership
+        const logRes = await pool.query('SELECT * FROM patients.medication_logs WHERE id = $1 AND patient_id = $2', [logId, req.user.id]);
+        if (logRes.rows.length === 0) {
+            return res.status(404).json({ message: 'Medication log not found or unauthorized' });
+        }
+        
+        const newTaken = !logRes.rows[0].taken;
+        await pool.query('UPDATE patients.medication_logs SET taken = $1 WHERE id = $2', [newTaken, logId]);
+        return res.json({ message: 'Medication log updated', taken: newTaken });
+    } catch (error) {
+        console.error('Error toggling medication log:', error.message);
         return res.status(500).json({ message: 'Server error' });
     }
 });
