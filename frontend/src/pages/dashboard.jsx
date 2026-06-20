@@ -188,6 +188,120 @@ function Dashboard({ user, onLogout, actionLoading }) {
     }
   };
 
+  // Health Records state
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [healthRecord, setHealthRecord] = useState({
+    blood_type: '',
+    blood_pressure: '',
+    weight: '',
+    height: '',
+    sugar_level: '',
+    diagnosis: '',
+    on_treatment: false,
+    morning_time: '',
+    midday_time: '',
+    evening_time: '',
+    admission_date: '',
+    release_date: ''
+  });
+  const [routinesList, setRoutinesList] = useState([]);
+  const [loadingHealthRecord, setLoadingHealthRecord] = useState(false);
+  const [savingHealthRecord, setSavingHealthRecord] = useState(false);
+  const [isHealthRecordModalOpen, setIsHealthRecordModalOpen] = useState(false);
+  const [healthRecordError, setHealthRecordError] = useState('');
+  const [healthRecordSuccess, setHealthRecordSuccess] = useState('');
+
+  const openHealthRecord = async (patient) => {
+    setSelectedPatient(patient);
+    setLoadingHealthRecord(true);
+    setHealthRecordError('');
+    setHealthRecordSuccess('');
+    
+    const dbPatientId = patient.id.replace('PT-', '');
+    
+    try {
+      const response = await api.get(`/auth/patients/${dbPatientId}/health-record`);
+      if (response.data) {
+        const hr = response.data.healthRecord || {};
+        setHealthRecord({
+          blood_type: hr.blood_type || '',
+          blood_pressure: hr.blood_pressure || '',
+          weight: hr.weight || '',
+          height: hr.height || '',
+          sugar_level: hr.sugar_level || '',
+          diagnosis: hr.diagnosis || '',
+          on_treatment: hr.on_treatment === true,
+          morning_time: hr.morning_time || '',
+          midday_time: hr.midday_time || '',
+          evening_time: hr.evening_time || '',
+          admission_date: hr.admission_date ? hr.admission_date.split('T')[0] : '',
+          release_date: hr.release_date ? hr.release_date.split('T')[0] : ''
+        });
+        setRoutinesList(response.data.routines || []);
+        setIsHealthRecordModalOpen(true);
+      }
+    } catch (err) {
+      console.error('Error fetching health record:', err);
+      alert('Failed to retrieve patient health records. Please try again.');
+    } finally {
+      setLoadingHealthRecord(false);
+    }
+  };
+
+  const handleSaveHealthRecord = async (e) => {
+    e.preventDefault();
+    setSavingHealthRecord(true);
+    setHealthRecordError('');
+    setHealthRecordSuccess('');
+    
+    const dbPatientId = selectedPatient.id.replace('PT-', '');
+    
+    try {
+      await api.put(`/auth/patients/${dbPatientId}/health-record`, {
+        ...healthRecord,
+        routines: routinesList
+      });
+      setHealthRecordSuccess('Health record and routines saved successfully!');
+      setTimeout(() => {
+        setIsHealthRecordModalOpen(false);
+        setHealthRecordSuccess('');
+      }, 1500);
+    } catch (err) {
+      console.error('Error saving health record:', err);
+      setHealthRecordError(err.response?.data?.message || 'Failed to save health record');
+    } finally {
+      setSavingHealthRecord(false);
+    }
+  };
+
+  const handleAddRoutine = () => {
+    setRoutinesList([
+      ...routinesList,
+      {
+        weekly: false,
+        monthly: false,
+        weekday: 'Monday',
+        day_of_month: 1,
+        time: '08:00',
+        description: 'Doctor visit/ checkup',
+        status: false
+      }
+    ]);
+  };
+
+  const handleRemoveRoutine = (index) => {
+    setRoutinesList(routinesList.filter((_, i) => i !== index));
+  };
+
+  const handleRoutineChange = (index, field, value) => {
+    setRoutinesList(routinesList.map((r, i) => {
+      if (i === index) {
+        return { ...r, [field]: value };
+      }
+      return r;
+    }));
+  };
+
   useEffect(() => {
     fetchPatients();
     fetchChws();
@@ -588,7 +702,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
                       </tr>
                     ) : (
                       patients.map((pt) => (
-                        <tr key={pt.id} className="hover:bg-slate-800/20 transition-colors">
+                        <tr key={pt.id} onClick={() => openHealthRecord(pt)} className="hover:bg-slate-800/20 transition-colors cursor-pointer">
                           <td className="py-3.5 px-4 font-bold text-slate-200">
                             {pt.name}
                             <span className="block text-[10px] text-slate-500 font-mono mt-0.5">{pt.id}</span>
@@ -1272,6 +1386,347 @@ function Dashboard({ user, onLogout, actionLoading }) {
                 >
                   {chwModalLoading && <Loader2 className="h-5 w-5 animate-spin" />}
                   {chwModalLoading ? 'Registering CHW...' : 'Register CHW'}
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= PATIENT HEALTH RECORD MODAL ================= */}
+      {isHealthRecordModalOpen && selectedPatient && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => { setIsHealthRecordModalOpen(false); setHealthRecordError(''); setHealthRecordSuccess(''); }}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <div className="flex justify-between items-baseline">
+                <h2 className="text-xl font-bold text-white">Health Record: {selectedPatient.name}</h2>
+                <span className="text-xs text-slate-500 font-mono">Patient ID: {selectedPatient.id}</span>
+              </div>
+              <p className="text-slate-400 text-xs mt-1">Review clinical readings, configure active treatments, and update scheduled care routines.</p>
+            </div>
+
+            {/* Error & Success Notification */}
+            {healthRecordError && (
+              <div className="bg-red-950/40 border border-red-500/25 text-red-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{healthRecordError}</span>
+              </div>
+            )}
+            {healthRecordSuccess && (
+              <div className="bg-emerald-950/40 border border-emerald-500/25 text-emerald-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{healthRecordSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveHealthRecord} className="space-y-6">
+              
+              {/* Grid 1: Clinical Diagnostics */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Clinical Measurements</h3>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Blood Type</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. O+"
+                      value={healthRecord.blood_type}
+                      onChange={(e) => setHealthRecord({...healthRecord, blood_type: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Blood Pressure</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="mmHg"
+                      value={healthRecord.blood_pressure}
+                      onChange={(e) => setHealthRecord({...healthRecord, blood_pressure: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Sugar Level</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="mmol/L"
+                      value={healthRecord.sugar_level}
+                      onChange={(e) => setHealthRecord({...healthRecord, sugar_level: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Weight (kg)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="kg"
+                      value={healthRecord.weight}
+                      onChange={(e) => setHealthRecord({...healthRecord, weight: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Height (cm)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="cm"
+                      value={healthRecord.height}
+                      onChange={(e) => setHealthRecord({...healthRecord, height: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="text-xs text-slate-400 font-semibold">Diagnosis</label>
+                    <input
+                      type="text"
+                      placeholder="Describe findings / conditions"
+                      value={healthRecord.diagnosis}
+                      onChange={(e) => setHealthRecord({...healthRecord, diagnosis: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-semibold">Admission Date</label>
+                      <input
+                        type="date"
+                        value={healthRecord.admission_date}
+                        onChange={(e) => setHealthRecord({...healthRecord, admission_date: e.target.value})}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-semibold">Release Date</label>
+                      <input
+                        type="date"
+                        value={healthRecord.release_date}
+                        onChange={(e) => setHealthRecord({...healthRecord, release_date: e.target.value})}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Treatment config */}
+              <div className="space-y-4 pt-2 border-t border-slate-800">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="on_treatment"
+                    checked={healthRecord.on_treatment}
+                    onChange={(e) => setHealthRecord({...healthRecord, on_treatment: e.target.checked})}
+                    className="h-4.5 w-4.5 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 focus:ring-opacity-20 focus:ring-2 bg-slate-950"
+                  />
+                  <label htmlFor="on_treatment" className="text-sm font-semibold text-slate-200 cursor-pointer">
+                    On Treatment
+                  </label>
+                </div>
+
+                {healthRecord.on_treatment && (
+                  <div className="bg-slate-950/40 border border-slate-800/80 rounded-2xl p-4 space-y-3 animate-fadeIn">
+                    <span className="text-xs font-semibold text-slate-400 block">Configure medication taking schedule (times of the day):</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-slate-500 font-semibold uppercase">Morning Time</label>
+                        <input
+                          type="time"
+                          value={healthRecord.morning_time}
+                          onChange={(e) => setHealthRecord({...healthRecord, morning_time: e.target.value})}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-slate-500 font-semibold uppercase">Midday Time</label>
+                        <input
+                          type="time"
+                          value={healthRecord.midday_time}
+                          onChange={(e) => setHealthRecord({...healthRecord, midday_time: e.target.value})}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-slate-500 font-semibold uppercase">Evening Time</label>
+                        <input
+                          type="time"
+                          value={healthRecord.evening_time}
+                          onChange={(e) => setHealthRecord({...healthRecord, evening_time: e.target.value})}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Care Routines manager */}
+              <div className="space-y-4 pt-4 border-t border-slate-800">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Scheduled Care Routines</h3>
+                  <button
+                    type="button"
+                    onClick={handleAddRoutine}
+                    className="py-1.5 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-bold rounded-lg flex items-center gap-1 transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add Care Routine
+                  </button>
+                </div>
+
+                <div className="space-y-3.5 max-h-[300px] overflow-y-auto pr-1">
+                  {routinesList.length === 0 ? (
+                    <p className="text-xs text-slate-500 text-center py-6 border border-dashed border-slate-800 rounded-2xl bg-slate-950/20">
+                      No routines scheduled. Add one to track appointments, checks, or refills.
+                    </p>
+                  ) : (
+                    routinesList.map((routine, idx) => (
+                      <div key={idx} className="bg-slate-950/30 border border-slate-800/80 rounded-2xl p-4 flex flex-col gap-3 relative">
+                        
+                        {/* Remove button */}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveRoutine(idx)}
+                          className="absolute top-4 right-4 text-slate-500 hover:text-red-400 transition-colors"
+                          title="Remove routine"
+                        >
+                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                          
+                          {/* Routine Description Selector */}
+                          <div className="md:col-span-4 space-y-1">
+                            <label className="text-[10px] text-slate-500 font-semibold uppercase">Routine Type *</label>
+                            <select
+                              value={routine.description}
+                              onChange={(e) => handleRoutineChange(idx, 'description', e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                            >
+                              <option value="Doctor visit/ checkup">Doctor visit/ checkup</option>
+                              <option value="medicine refill">medicine refill</option>
+                            </select>
+                          </div>
+
+                          {/* Time */}
+                          <div className="md:col-span-2 space-y-1">
+                            <label className="text-[10px] text-slate-500 font-semibold uppercase">Time *</label>
+                            <input
+                              type="time"
+                              required
+                              value={routine.time}
+                              onChange={(e) => handleRoutineChange(idx, 'time', e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors font-mono"
+                            />
+                          </div>
+
+                          {/* Frequency selectors */}
+                          <div className="md:col-span-4 flex gap-4 items-center h-full pt-4">
+                            <label className="flex items-center gap-1.5 text-xs text-slate-350 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={routine.weekly}
+                                onChange={(e) => handleRoutineChange(idx, 'weekly', e.target.checked)}
+                                className="h-4 w-4 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-900"
+                              />
+                              Weekly
+                            </label>
+                            <label className="flex items-center gap-1.5 text-xs text-slate-350 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={routine.monthly}
+                                onChange={(e) => handleRoutineChange(idx, 'monthly', e.target.checked)}
+                                className="h-4 w-4 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-900"
+                              />
+                              Monthly
+                            </label>
+                          </div>
+
+                          {/* Status checklist */}
+                          <div className="md:col-span-2 flex items-center pt-4">
+                            <label className="flex items-center gap-1.5 text-xs text-slate-350 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={routine.status}
+                                onChange={(e) => handleRoutineChange(idx, 'status', e.target.checked)}
+                                className="h-4 w-4 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-900"
+                              />
+                              Attended
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Conditional inputs for weekly / monthly frequency details */}
+                        <div className="grid grid-cols-2 gap-4 border-t border-slate-900 pt-2 text-xs">
+                          {routine.weekly && (
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-500 font-semibold uppercase">Weekday</label>
+                              <select
+                                value={routine.weekday || 'Monday'}
+                                onChange={(e) => handleRoutineChange(idx, 'weekday', e.target.value)}
+                                className="bg-slate-900 border border-slate-850 rounded-xl py-1.5 px-3 w-full text-slate-200 outline-none"
+                              >
+                                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => (
+                                  <option key={d} value={d}>{d}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                          {routine.monthly && (
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-500 font-semibold uppercase">Day of Month</label>
+                              <input
+                                type="number"
+                                min={1}
+                                max={31}
+                                value={routine.day_of_month || 1}
+                                onChange={(e) => handleRoutineChange(idx, 'day_of_month', parseInt(e.target.value, 10))}
+                                className="bg-slate-900 border border-slate-850 rounded-xl py-1.5 px-3 w-full text-slate-200 outline-none font-mono"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-4 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => { setIsHealthRecordModalOpen(false); setHealthRecordError(''); setHealthRecordSuccess(''); }}
+                  className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingHealthRecord}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  {savingHealthRecord && <Loader2 className="h-5 w-5 animate-spin" />}
+                  {savingHealthRecord ? 'Saving Record...' : 'Save Health Record'}
                 </button>
               </div>
 
