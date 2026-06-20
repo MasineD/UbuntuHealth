@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { LayoutDashboard, Users, Calendar, ArrowLeftRight, MessageSquare, LogOut, Loader2,ShieldCheck,Search,Bell,Plus,Send,User as UserIcon,CheckCircle,FileText,Clock,Menu,ChevronRight,X, Activity
+import { LayoutDashboard, Users, Calendar, ArrowLeftRight, MessageSquare, LogOut, Loader2,ShieldCheck,Search,Bell,Plus,Send,User as UserIcon,CheckCircle,FileText,Clock,Menu,ChevronRight,X, Activity, AlertTriangle
 } from 'lucide-react';
 import { io } from 'socket.io-client';
 import ChatRoom from '../components/ChatRoom';
@@ -55,7 +55,9 @@ function Dashboard({ user, onLogout, actionLoading }) {
 
           const newToast = {
             id: Date.now() + Math.random(),
-            type: data.type === 'referral_created' ? 'referral' : 'appointment',
+            type: data.type === 'compliance_alert' 
+              ? 'compliance_alert' 
+              : (data.type === 'referral_created' ? 'referral' : 'appointment'),
             title: data.title,
             message: data.message
           };
@@ -64,6 +66,10 @@ function Dashboard({ user, onLogout, actionLoading }) {
           setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== newToast.id));
           }, 5000);
+
+          if (data.type === 'compliance_alert') {
+            fetchComplianceAlerts();
+          }
         });
 
         socketInstance.on('new-message', (msg) => {
@@ -136,6 +142,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
 
   // State to hold retrieved patients
   const [patients, setPatients] = useState([]);
+  const [complianceAlerts, setComplianceAlerts] = useState([]);
   const [loadingPatients, setLoadingPatients] = useState(false);
 
   // Appointments administrative state
@@ -188,6 +195,30 @@ function Dashboard({ user, onLogout, actionLoading }) {
       console.error('Error fetching patients:', err);
     } finally {
       setLoadingPatients(false);
+    }
+  };
+
+  const fetchComplianceAlerts = async () => {
+    try {
+      const response = await api.get('/auth/admin/compliance-alerts');
+      if (response.data && response.data.complianceAlerts) {
+        setComplianceAlerts(response.data.complianceAlerts);
+      }
+    } catch (err) {
+      console.error('Error fetching compliance alerts:', err);
+    }
+  };
+
+  const handleScheduleHomeVisit = async (alertId) => {
+    try {
+      const response = await api.post(`/auth/admin/compliance-alerts/${alertId}/schedule-visit`);
+      if (response.data) {
+        setComplianceAlerts(prev => prev.map(a => 
+          a.id === alertId ? { ...a, visit_scheduled: true } : a
+        ));
+      }
+    } catch (err) {
+      console.error('Error scheduling home visit:', err);
     }
   };
 
@@ -636,6 +667,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
     fetchOrganizations();
     fetchOrganizationPatients();
     fetchAppointments();
+    fetchComplianceAlerts();
   }, []);
 
   // Modal State
@@ -1052,6 +1084,55 @@ function Dashboard({ user, onLogout, actionLoading }) {
                   </div>
                 </div>
 
+              </div>
+
+              {/* Patient Compliance Section */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div className="pb-4 border-b border-slate-800">
+                  <h3 className="font-bold text-slate-200">Patient Compliance</h3>
+                  <p className="text-slate-500 text-xs">Patients who have missed their scheduled medication today</p>
+                </div>
+                {complianceAlerts.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic py-2">All patients are compliant today.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {complianceAlerts.map((alert) => (
+                      <div key={alert.id} className="bg-slate-950/40 border border-slate-800 p-4 rounded-xl flex flex-col justify-between gap-4">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="font-bold text-slate-200 text-sm">{alert.patient_name}</h4>
+                              <p className="text-xs text-slate-500">ID: {alert.patient_id_number || 'N/A'}</p>
+                            </div>
+                            <span className="bg-red-500/10 border border-red-500/20 text-red-400 font-mono text-[10px] px-2 py-0.5 rounded font-bold uppercase">
+                              Did not take medication
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-slate-400 border-t border-slate-800/40 pt-2.5">
+                            <div><strong>Phone:</strong> {alert.patient_phone || 'N/A'}</div>
+                            <div><strong>Gender:</strong> {alert.patient_gender || 'N/A'}</div>
+                            <div><strong>Address:</strong> {alert.patient_address || 'N/A'}</div>
+                            <div className="col-span-2"><strong>Next of Kin:</strong> {alert.patient_next_of_kin || 'N/A'} ({alert.patient_next_of_kin_phone || 'N/A'})</div>
+                          </div>
+                        </div>
+                        <div className="flex justify-end pt-2 border-t border-slate-800/40">
+                          {alert.visit_scheduled ? (
+                            <span className="text-xs text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
+                              Home Visit Scheduled
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleScheduleHomeVisit(alert.id)}
+                              className="py-1.5 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                            >
+                              Schedule Home Visit
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
             </div>
@@ -2844,9 +2925,19 @@ function Dashboard({ user, onLogout, actionLoading }) {
                 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
                 : toast.type === 'referral' 
                   ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20'
-                  : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+                  : toast.type === 'compliance_alert'
+                    ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                    : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
             }`}>
-              {toast.type === 'message' ? <MessageSquare className="h-4 w-4" /> : toast.type === 'referral' ? <Activity className="h-4 w-4" /> : <Calendar className="h-4 w-4" />}
+              {toast.type === 'message' ? (
+                <MessageSquare className="h-4 w-4" />
+              ) : toast.type === 'referral' ? (
+                <Activity className="h-4 w-4" />
+              ) : toast.type === 'compliance_alert' ? (
+                <AlertTriangle className="h-4 w-4" />
+              ) : (
+                <Calendar className="h-4 w-4" />
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <h4 className="text-xs font-bold text-slate-200">{toast.title}</h4>
