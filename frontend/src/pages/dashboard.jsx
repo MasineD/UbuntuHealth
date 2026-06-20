@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { LayoutDashboard, Users, Calendar, ArrowLeftRight, MessageSquare, LogOut, Loader2,ShieldCheck,Search,Bell,Plus,Send,User as UserIcon,CheckCircle,FileText,Clock,Menu,ChevronRight,X, Activity, AlertTriangle
 } from 'lucide-react';
@@ -57,7 +57,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
             id: Date.now() + Math.random(),
             type: data.type === 'compliance_alert' 
               ? 'compliance_alert' 
-              : (data.type === 'referral_created' ? 'referral' : 'appointment'),
+              : (data.type === 'home_visit_fulfilled' ? 'compliance_alert' : (data.type === 'referral_created' ? 'referral' : 'appointment')),
             title: data.title,
             message: data.message
           };
@@ -67,7 +67,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
             setToasts(prev => prev.filter(t => t.id !== newToast.id));
           }, 5000);
 
-          if (data.type === 'compliance_alert') {
+          if (data.type === 'compliance_alert' || data.type === 'home_visit_fulfilled') {
             fetchComplianceAlerts();
           }
         });
@@ -143,6 +143,8 @@ function Dashboard({ user, onLogout, actionLoading }) {
   // State to hold retrieved patients
   const [patients, setPatients] = useState([]);
   const [complianceAlerts, setComplianceAlerts] = useState([]);
+  const [hiddenAlertIds, setHiddenAlertIds] = useState([]);
+  const activeTimeoutsRef = useRef({});
   const [isScheduleVisitModalOpen, setIsScheduleVisitModalOpen] = useState(false);
   const [selectedAlertForVisit, setSelectedAlertForVisit] = useState(null);
   const [selectedChwId, setSelectedChwId] = useState('');
@@ -241,6 +243,39 @@ function Dashboard({ user, onLogout, actionLoading }) {
       console.error('Error scheduling home visit:', err);
     }
   };
+
+  // Handle card disappearance 30 seconds after status changes to 'visitted'
+  useEffect(() => {
+    complianceAlerts.forEach(alert => {
+      if (alert.visit_status === 'visitted' && !hiddenAlertIds.includes(alert.id)) {
+        if (!activeTimeoutsRef.current[alert.id]) {
+          const timeoutId = setTimeout(() => {
+            setHiddenAlertIds(prev => [...prev, alert.id]);
+            delete activeTimeoutsRef.current[alert.id];
+          }, 30000); // 30 seconds
+          activeTimeoutsRef.current[alert.id] = timeoutId;
+        }
+      }
+    });
+
+    // Cleanup timeouts for any alerts that are no longer in complianceAlerts
+    const alertIds = complianceAlerts.map(a => a.id);
+    Object.keys(activeTimeoutsRef.current).forEach(id => {
+      if (!alertIds.includes(Number(id))) {
+        clearTimeout(activeTimeoutsRef.current[id]);
+        delete activeTimeoutsRef.current[id];
+      }
+    });
+  }, [complianceAlerts, hiddenAlertIds]);
+
+  // Clean up all timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (activeTimeoutsRef.current) {
+        Object.values(activeTimeoutsRef.current).forEach(clearTimeout);
+      }
+    };
+  }, []);
 
   // CHWs state
   const [chws, setChws] = useState([]);
@@ -1112,21 +1147,36 @@ function Dashboard({ user, onLogout, actionLoading }) {
                   <h3 className="font-bold text-slate-200">Patient Compliance</h3>
                   <p className="text-slate-500 text-xs">Patients who have missed their scheduled medication today</p>
                 </div>
-                {complianceAlerts.length === 0 ? (
+                {complianceAlerts.filter(alert => !hiddenAlertIds.includes(alert.id)).length === 0 ? (
                   <p className="text-xs text-slate-500 italic py-2">All patients are compliant today.</p>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {complianceAlerts.map((alert) => (
-                      <div key={alert.id} className="bg-slate-950/40 border border-slate-800 p-4 rounded-xl flex flex-col justify-between gap-4">
+                    {complianceAlerts.filter(alert => !hiddenAlertIds.includes(alert.id)).map((alert) => (
+                      <div key={alert.id} className="group relative bg-slate-950/40 border border-slate-800 p-4 rounded-xl flex flex-col justify-between gap-4 overflow-hidden">
+                        
+                        {/* Hover summary notes */}
+                        {alert.visit_status === 'visitted' && alert.visit_notes && (
+                          <div className="absolute inset-0 bg-slate-950/95 p-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center text-center z-10 pointer-events-none">
+                            <span className="text-xs text-emerald-400 font-semibold mb-1 uppercase tracking-wider font-mono">Visit Notes</span>
+                            <p className="text-xs text-slate-300 leading-relaxed max-w-xs">{alert.visit_notes}</p>
+                          </div>
+                        )}
+
                         <div className="space-y-2">
                           <div className="flex justify-between items-start">
                             <div>
                               <h4 className="font-bold text-slate-200 text-sm">{alert.patient_name}</h4>
                               <p className="text-xs text-slate-500">ID: {alert.patient_id_number || 'N/A'}</p>
                             </div>
-                            <span className="bg-red-500/10 border border-red-500/20 text-red-400 font-mono text-[10px] px-2 py-0.5 rounded font-bold uppercase">
-                              Did not take medication
-                            </span>
+                            {alert.visit_status === 'visitted' ? (
+                              <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono text-[10px] px-2 py-0.5 rounded font-bold uppercase">
+                                Visited
+                              </span>
+                            ) : (
+                              <span className="bg-red-500/10 border border-red-500/20 text-red-400 font-mono text-[10px] px-2 py-0.5 rounded font-bold uppercase">
+                                Did not take medication
+                              </span>
+                            )}
                           </div>
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-slate-400 border-t border-slate-800/40 pt-2.5">
                             <div><strong>Phone:</strong> {alert.patient_phone || 'N/A'}</div>
@@ -1136,7 +1186,11 @@ function Dashboard({ user, onLogout, actionLoading }) {
                           </div>
                         </div>
                         <div className="flex justify-end pt-2 border-t border-slate-800/40">
-                          {alert.visit_scheduled ? (
+                          {alert.visit_status === 'visitted' ? (
+                            <span className="text-xs text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
+                              Visited
+                            </span>
+                          ) : alert.visit_scheduled ? (
                             <button
                               disabled
                               className="py-1.5 px-3 bg-slate-800 text-slate-500 text-xs font-bold rounded-lg cursor-not-allowed"
