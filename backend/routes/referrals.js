@@ -99,7 +99,47 @@ router.post('/referrals', protect, async (req, res) => {
             ]
         );
 
-        return res.status(201).json({ message: 'Referral created successfully', referral: newReferral.rows[0] });
+        const referral = newReferral.rows[0];
+        const io = req.app.get('socketio');
+
+        if (io) {
+            const org = organization_to;
+            const notificationData = {
+                type: 'referral_created',
+                title: 'New Referral Created',
+                message: `A new referral has been created for patient "${personel}" to ${organization_to} (${department_to})`,
+                referralId: referral.id,
+                timestamp: new Date().toISOString()
+            };
+
+            // Notify patient if registered
+            const patientRes = await pool.query('SELECT id FROM users.patients WHERE fullname = $1', [personel]);
+            if (patientRes.rows.length > 0) {
+                const patientId = patientRes.rows[0].id;
+                const patientOrgRes = await pool.query(
+                    'SELECT a.organization FROM users.patients p JOIN users.admins a ON p.registra_id = a.id WHERE p.id = $1',
+                    [patientId]
+                );
+                const patientOrg = patientOrgRes.rows[0]?.organization || org;
+                io.to(`org_${patientOrg}_user_patient_${patientId}`).emit('new-notification', notificationData);
+            }
+
+            // Notify target clinician if assigned
+            if (staff_to) {
+                const staffRes = await pool.query(
+                    'SELECT id FROM users.clinical_staff WHERE fullname = $1 OR employee_id = $1 OR id::text = $1',
+                    [staff_to]
+                );
+                if (staffRes.rows.length > 0) {
+                    io.to(`org_${org}_user_staff_${staffRes.rows[0].id}`).emit('new-notification', notificationData);
+                }
+            }
+
+            // Notify target admin
+            io.to(`org_${org}_role_admin`).emit('new-notification', notificationData);
+        }
+
+        return res.status(201).json({ message: 'Referral created successfully', referral });
     } catch (error) {
         console.error('Error creating referral:', error.message);
         return res.status(500).json({ message: 'Server error' });

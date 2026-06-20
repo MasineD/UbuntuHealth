@@ -182,6 +182,39 @@ router.put('/appointments/:id/status', protect, async (req, res) => {
         }
 
         await pool.query('UPDATE tasks.appointments SET status = $1 WHERE id = $2', [status, appointmentId]);
+
+        const io = req.app.get('socketio');
+        if (io) {
+            const org = appointment.organization_to;
+            const notificationData = {
+                type: 'appointment_status',
+                title: 'Appointment Status Updated',
+                message: `Appointment #${appointmentId} status for ${appointment.fullname} has been updated to "${status}"`,
+                appointmentId,
+                status,
+                timestamp: new Date().toISOString()
+            };
+
+            // Notify patient if registered
+            if (appointment.patient_id) {
+                io.to(`org_${org}_user_patient_${appointment.patient_id}`).emit('new-notification', notificationData);
+            }
+
+            // Notify clinician if assigned
+            if (appointment.staff_to) {
+                const staffRes = await pool.query(
+                    'SELECT id FROM users.clinical_staff WHERE fullname = $1 OR employee_id = $1 OR id::text = $1',
+                    [appointment.staff_to]
+                );
+                if (staffRes.rows.length > 0) {
+                    io.to(`org_${org}_user_staff_${staffRes.rows[0].id}`).emit('new-notification', notificationData);
+                }
+            }
+
+            // Notify admin
+            io.to(`org_${org}_role_admin`).emit('new-notification', notificationData);
+        }
+
         return res.json({ message: `Appointment status updated to ${status}` });
     } catch (error) {
         console.error('Error updating appointment status:', error.message);
