@@ -166,17 +166,65 @@ router.post('/chw/home-visits/:id/fulfill', protect, async (req, res) => {
         return res.status(403).json({ message: 'Only community health workers can fulfill visits' });
     }
     const visitId = req.params.id;
+    const { visitNotes } = req.body;
     try {
         const result = await pool.query(
             `UPDATE patients.compliance_alerts 
-             SET visit_status = 'fulfilled' 
-             WHERE id = $1 AND chw_id = $2 RETURNING *`,
-            [visitId, req.user.id]
+             SET visit_status = 'visitted', visit_notes = $1 
+             WHERE id = $2 AND chw_id = $3 RETURNING *`,
+            [visitNotes || '', visitId, req.user.id]
         );
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'Assigned home visit not found' });
         }
-        return res.json({ message: 'Home visit marked as fulfilled successfully', visit: result.rows[0] });
+        
+        const alert = result.rows[0];
+
+        // Fetch patient and CHW details
+        const patientRes = await pool.query(
+            `SELECT fullname FROM users.patients WHERE id = $1`,
+            [alert.patient_id]
+        );
+        const patientName = patientRes.rows[0]?.fullname || 'Patient';
+
+        const chwRes = await pool.query(
+            `SELECT fullname FROM users.comm_health_workers WHERE id = $1`,
+            [req.user.id]
+        );
+        const chwName = chwRes.rows[0]?.fullname || 'Community Health Worker';
+
+        // Retrieve org of registering admin
+        const orgRes = await pool.query(
+            `SELECT a.organization 
+             FROM users.comm_health_workers u 
+             JOIN users.admins a ON u.registra_id = a.id 
+             WHERE u.id = $1`,
+            [req.user.id]
+        );
+        const org = orgRes.rows[0]?.organization;
+
+        const io = req.app.get('socketio');
+        if (io && org) {
+            const adminNotification = {
+                type: 'home_visit_fulfilled',
+                title: 'Home Visit Fulfilled',
+                message: `Community Health Worker "${chwName}" has fulfilled the home visit for patient "${patientName}". Visit Notes: ${visitNotes}`,
+                timestamp: new Date().toISOString(),
+                visit: {
+                    id: alert.id,
+                    patient_id: alert.patient_id,
+                    patient_name: patientName,
+                    chw_id: req.user.id,
+                    chw_name: chwName,
+                    visit_status: 'visitted',
+                    visit_notes: visitNotes,
+                    visit_date: alert.visit_date
+                }
+            };
+            io.to(`org_${org}_role_admin`).emit('new-notification', adminNotification);
+        }
+
+        return res.json({ message: 'Home visit marked as fulfilled successfully', visit: alert });
     } catch (error) {
         console.error('Error fulfilling home visit:', error.message);
         return res.status(500).json({ message: 'Server error' });

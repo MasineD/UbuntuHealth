@@ -370,7 +370,7 @@ router.get('/admin/compliance-alerts', protect, async (req, res) => {
     }
     try {
         const result = await pool.query(
-            `SELECT ca.id, ca.date::text, ca.visit_scheduled, ca.visit_date::text, ca.visit_reason, ca.visit_status, ca.patient_id,
+            `SELECT ca.id, ca.date::text, ca.visit_scheduled, ca.visit_date::text, ca.visit_reason, ca.visit_status, ca.visit_notes, ca.patient_id,
                     p.fullname AS patient_name, p.id_number AS patient_id_number,
                     p.gender AS patient_gender, p.email AS patient_email,
                     p.phone_number AS patient_phone, p.house_number, p.surbub, p.city,
@@ -397,7 +397,8 @@ router.get('/admin/compliance-alerts', protect, async (req, res) => {
             visit_scheduled: row.visit_scheduled,
             visit_date: row.visit_date,
             visit_reason: row.visit_reason,
-            visit_status: row.visit_status
+            visit_status: row.visit_status,
+            visit_notes: row.visit_notes
         }));
         return res.json({ complianceAlerts: alerts });
     } catch (error) {

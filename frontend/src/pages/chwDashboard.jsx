@@ -30,10 +30,20 @@ function ChwDashboard({ user, onLogout, actionLoading }) {
     }
   };
 
-  const handleFulfillHomeVisit = async (visitId) => {
+  const [isFulfillModalOpen, setIsFulfillModalOpen] = useState(false);
+  const [selectedVisitForFulfill, setSelectedVisitForFulfill] = useState(null);
+  const [visitNotes, setVisitNotes] = useState('');
+
+  const submitFulfillHomeVisit = async () => {
+    if (!selectedVisitForFulfill || !visitNotes.trim()) return;
     try {
-      await api.post(`/auth/chw/home-visits/${visitId}/fulfill`);
+      await api.post(`/auth/chw/home-visits/${selectedVisitForFulfill.id}/fulfill`, {
+        visitNotes: visitNotes.trim()
+      });
       fetchHomeVisits();
+      setIsFulfillModalOpen(false);
+      setSelectedVisitForFulfill(null);
+      setVisitNotes('');
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to fulfill home visit');
     }
@@ -720,11 +730,11 @@ function ChwDashboard({ user, onLogout, actionLoading }) {
                               <p className="text-xs text-slate-500">ID: {visit.patient_id_number || 'N/A'}</p>
                             </div>
                             <span className={`font-mono text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
-                              visit.status === 'fulfilled'
+                              visit.status === 'visitted'
                                 ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
                                 : 'bg-red-500/10 border border-red-500/20 text-red-400'
                             }`}>
-                              {visit.status === 'fulfilled' ? 'fulfilled' : 'Pending Visit'}
+                              {visit.status === 'visitted' ? 'visited' : 'Pending Visit'}
                             </span>
                           </div>
 
@@ -739,13 +749,17 @@ function ChwDashboard({ user, onLogout, actionLoading }) {
                         </div>
 
                         <div className="flex justify-end pt-2 border-t border-slate-800/40">
-                          {visit.status === 'fulfilled' ? (
+                          {visit.status === 'visitted' ? (
                             <span className="text-xs text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
-                              Fulfilled
+                              Visited
                             </span>
                           ) : (
                             <button
-                              onClick={() => handleFulfillHomeVisit(visit.id)}
+                              onClick={() => {
+                                setSelectedVisitForFulfill(visit);
+                                setVisitNotes('');
+                                setIsFulfillModalOpen(true);
+                              }}
                               className="py-1.5 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg transition-colors cursor-pointer"
                             >
                               Mark Fulfilled
@@ -1023,6 +1037,64 @@ function ChwDashboard({ user, onLogout, actionLoading }) {
               </div>
 
             </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= CHW VISIT FULFILL MODAL ================= */}
+      {isFulfillModalOpen && selectedVisitForFulfill && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => { setIsFulfillModalOpen(false); setSelectedVisitForFulfill(null); setVisitNotes(''); }}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <h2 className="text-xl font-bold text-white">Fulfill Home Visit</h2>
+              <p className="text-slate-400 text-xs mt-1">Record the summary of actions taken during the visit for patient {selectedVisitForFulfill.patient_name}.</p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold">What was done during the visit? *</label>
+                <textarea
+                  required
+                  rows={4}
+                  value={visitNotes}
+                  onChange={(e) => setVisitNotes(e.target.value)}
+                  placeholder="Explain the patient checks, medication delivery, or instructions given..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-4 pt-4 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => { setIsFulfillModalOpen(false); setSelectedVisitForFulfill(null); setVisitNotes(''); }}
+                className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              {visitNotes.trim() && (
+                <button
+                  type="button"
+                  onClick={submitFulfillHomeVisit}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all"
+                >
+                  fulfill
+                </button>
+              )}
+            </div>
 
           </div>
         </div>
