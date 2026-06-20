@@ -1,6 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import axios from 'axios';
 import { LayoutDashboard, Users, Calendar, ArrowLeftRight, MessageSquare, LogOut, Loader2,ShieldCheck,Search,Bell,Plus,Send,User as UserIcon,CheckCircle,FileText,Clock,Menu,ChevronRight
 } from 'lucide-react';
+
+const api = axios.create({
+  baseURL: 'http://localhost:5000/api',
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
 
 function Dashboard({ user, onLogout, actionLoading }) {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'patients' | 'appointments' | 'referrals' | 'chat'
@@ -29,13 +38,154 @@ function Dashboard({ user, onLogout, actionLoading }) {
     setNewMessage('');
   };
 
-  // Simulated data lists
-  const patientsList = [
-    { id: 'PT-1082', name: 'John Doe', age: 45, gender: 'Male', condition: 'Hypertension', status: 'Stable', chw: 'Musa Dube', lastCheck: '2026-06-18' },
-    { id: 'PT-1094', name: 'Jane Smith', age: 32, gender: 'Female', condition: 'Diabetes Type 2', status: 'Requires Review', chw: 'Lindiwe Sisulu', lastCheck: '2026-06-19' },
-    { id: 'PT-1102', name: 'David Miller', age: 67, gender: 'Male', condition: 'Chronic Kidney Disease', status: 'Stable', chw: 'Musa Dube', lastCheck: '2026-06-15' },
-    { id: 'PT-1115', name: 'Zanele Ndlovu', age: 29, gender: 'Female', condition: 'Pregnancy Follow-up', status: 'Stable', chw: 'Naledi Pandor', lastCheck: '2026-06-17' }
-  ];
+  const calculateAgeFromId = (idNumber) => {
+    if (!idNumber || idNumber.length !== 13) return 30;
+    try {
+      const yearStr = idNumber.substring(0, 2);
+      const monthStr = idNumber.substring(2, 4);
+      const dayStr = idNumber.substring(4, 6);
+      const year = parseInt(yearStr, 10);
+      const month = parseInt(monthStr, 10);
+      const day = parseInt(dayStr, 10);
+      if (isNaN(year) || isNaN(month) || isNaN(day)) return 30;
+      
+      const currentYear = new Date().getFullYear();
+      const currentCentury = Math.floor(currentYear / 100) * 100;
+      const birthYear = year + (year + 2000 > currentYear ? currentCentury - 100 : currentCentury);
+      
+      const birthDate = new Date(birthYear, month - 1, day);
+      let age = currentYear - birthYear;
+      const m = new Date().getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && new Date().getDate() < birthDate.getDate())) {
+        age--;
+      }
+      return isNaN(age) ? 30 : age;
+    } catch (e) {
+      return 30;
+    }
+  };
+
+  // State to hold retrieved patients
+  const [patients, setPatients] = useState([]);
+  const [loadingPatients, setLoadingPatients] = useState(false);
+
+  const fetchPatients = async () => {
+    setLoadingPatients(true);
+    try {
+      const response = await api.get('/auth/patients');
+      if (response.data && response.data.patients) {
+        const mapped = response.data.patients.map(p => ({
+          id: 'PT-' + p.id,
+          name: p.fullname,
+          age: calculateAgeFromId(p.id_number),
+          gender: p.gender,
+          condition: 'Regular Patient',
+          status: 'Stable',
+          chw: 'Unassigned',
+          lastCheck: new Date().toISOString().split('T')[0],
+          ...p
+        }));
+        setPatients(mapped);
+      }
+    } catch (err) {
+      console.error('Error fetching patients:', err);
+    } finally {
+      setLoadingPatients(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPatients();
+  }, []);
+
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState('');
+  const [modalSuccess, setModalSuccess] = useState('');
+  
+  const [patientForm, setPatientForm] = useState({
+    fullname: '',
+    id_number: '',
+    gender: 'Male',
+    password: '',
+    email: '',
+    phone_number: '',
+    house_number: '',
+    surbub: '',
+    municipality: '',
+    city: '',
+    next_of_kin_fullname: '',
+    next_of_kin_email: '',
+    next_of_kin_phone: ''
+  });
+
+  const handleRegisterPatient = async (e) => {
+    e.preventDefault();
+    setModalError('');
+    setModalSuccess('');
+    
+    // Validations
+    if (patientForm.id_number.length !== 13) {
+      setModalError('National ID must be exactly 13 digits');
+      return;
+    }
+    if (patientForm.phone_number.length !== 10 || patientForm.next_of_kin_phone.length !== 10) {
+      setModalError('Phone numbers must be exactly 10 digits');
+      return;
+    }
+
+    setModalLoading(true);
+    try {
+      const response = await api.post('/auth/register-patient', patientForm);
+      if (response.data && response.data.patient) {
+        setModalSuccess('Patient registered successfully!');
+        
+        // Add new patient to state list
+        const newPt = response.data.patient;
+        setPatients([
+          ...patients,
+          {
+            id: 'PT-' + newPt.id,
+            name: newPt.fullname,
+            age: 30, // Default simulated age
+            gender: patientForm.gender,
+            condition: 'New Registration',
+            status: 'Stable',
+            chw: 'Unassigned',
+            lastCheck: new Date().toISOString().split('T')[0]
+          }
+        ]);
+
+        // Reset form
+        setPatientForm({
+          fullname: '',
+          id_number: '',
+          gender: 'Male',
+          password: '',
+          email: '',
+          phone_number: '',
+          house_number: '',
+          surbub: '',
+          municipality: '',
+          city: '',
+          next_of_kin_fullname: '',
+          next_of_kin_email: '',
+          next_of_kin_phone: ''
+        });
+
+        // Close modal after 1.5s
+        setTimeout(() => {
+          setIsModalOpen(false);
+          setModalSuccess('');
+        }, 1500);
+      }
+    } catch (err) {
+      setModalError(err.response?.data?.message || 'Failed to register patient');
+    } finally {
+      setModalLoading(false);
+    }
+  };
 
   const appointmentsList = [
     { id: 'AP-501', patient: 'Jane Smith', type: 'Diabetes Follow-up', doctor: 'Dr. Sarah Jenkins', time: '10:30 AM', date: '2026-06-20', status: 'Upcoming' },
@@ -196,7 +346,7 @@ function Dashboard({ user, onLogout, actionLoading }) {
               {/* Statistics Grid */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 {[
-                  { title: 'Total Patients', value: '1,482', change: '+12% this week', icon: Users, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
+                  { title: 'Total Patients', value: patients.length.toString(), change: 'Registered by you', icon: Users, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
                   { title: 'Appointments Today', value: '8', change: 'Next at 10:30 AM', icon: Calendar, color: 'text-sky-400 bg-sky-500/10 border-sky-500/20' },
                   { title: 'Pending Referrals', value: '3', change: 'Requires Action', icon: ArrowLeftRight, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
                   { title: 'Active Health Workers', value: '45', change: '8 online', icon: ShieldCheck, color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' }
@@ -306,7 +456,10 @@ function Dashboard({ user, onLogout, actionLoading }) {
                   <h3 className="font-bold text-slate-200">Follow-up Patients</h3>
                   <p className="text-slate-500 text-xs">List of patients assigned to your local medical facility</p>
                 </div>
-                <button className="py-2 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors">
+                <button 
+                  onClick={() => setIsModalOpen(true)}
+                  className="py-2 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors"
+                >
                   <Plus className="h-4 w-4" /> Add Patient
                 </button>
               </div>
@@ -324,25 +477,40 @@ function Dashboard({ user, onLogout, actionLoading }) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80">
-                    {patientsList.map((pt) => (
-                      <tr key={pt.id} className="hover:bg-slate-800/20 transition-colors">
-                        <td className="py-3.5 px-4 font-bold text-slate-200">
-                          {pt.name}
-                          <span className="block text-[10px] text-slate-500 font-mono mt-0.5">{pt.id}</span>
-                        </td>
-                        <td className="py-3.5 px-4 text-slate-400">{pt.gender}, {pt.age}</td>
-                        <td className="py-3.5 px-4 text-slate-300">{pt.condition}</td>
-                        <td className="py-3.5 px-4 text-slate-400">{pt.chw}</td>
-                        <td className="py-3.5 px-4 text-slate-500 font-mono text-xs">{pt.lastCheck}</td>
-                        <td className="py-3.5 px-4">
-                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                            pt.status === 'Stable' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
-                          }`}>
-                            {pt.status}
-                          </span>
+                    {loadingPatients ? (
+                      <tr>
+                        <td colSpan="6" className="py-8 text-center text-slate-550">
+                          <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-400" />
+                          Loading patients list...
                         </td>
                       </tr>
-                    ))}
+                    ) : patients.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="py-8 text-center text-slate-550">
+                          No patients associated with you found. Click "Add Patient" to register one.
+                        </td>
+                      </tr>
+                    ) : (
+                      patients.map((pt) => (
+                        <tr key={pt.id} className="hover:bg-slate-800/20 transition-colors">
+                          <td className="py-3.5 px-4 font-bold text-slate-200">
+                            {pt.name}
+                            <span className="block text-[10px] text-slate-500 font-mono mt-0.5">{pt.id}</span>
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-400">{pt.gender}, {pt.age}</td>
+                          <td className="py-3.5 px-4 text-slate-300">{pt.condition}</td>
+                          <td className="py-3.5 px-4 text-slate-400">{pt.chw}</td>
+                          <td className="py-3.5 px-4 text-slate-500 font-mono text-xs">{pt.lastCheck}</td>
+                          <td className="py-3.5 px-4">
+                            <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              pt.status === 'Stable' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
+                            }`}>
+                              {pt.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -511,6 +679,237 @@ function Dashboard({ user, onLogout, actionLoading }) {
         </section>
       </main>
 
+      {/* ================= PATIENT REGISTRATION MODAL ================= */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => { setIsModalOpen(false); setModalError(''); setModalSuccess(''); }}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <h2 className="text-xl font-bold text-white">Register New Patient</h2>
+              <p className="text-slate-400 text-xs mt-1">Provide all details to add the patient to the clinical register.</p>
+            </div>
+
+            {/* Error & Success Notification */}
+            {modalError && (
+              <div className="bg-red-950/40 border border-red-500/25 text-red-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{modalError}</span>
+              </div>
+            )}
+            {modalSuccess && (
+              <div className="bg-emerald-950/40 border border-emerald-500/25 text-emerald-300 p-3.5 rounded-xl text-xs flex items-center gap-2">
+                <span>{modalSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleRegisterPatient} className="space-y-6">
+              
+              {/* Group 1: General Info */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">General Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Full Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Firstname Lastname"
+                      value={patientForm.fullname}
+                      onChange={(e) => setPatientForm({...patientForm, fullname: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-semibold">Gender *</label>
+                      <select
+                        value={patientForm.gender}
+                        onChange={(e) => setPatientForm({...patientForm, gender: e.target.value})}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                      >
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-semibold">National ID *</label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={13}
+                        placeholder="13-digit ID"
+                        value={patientForm.id_number}
+                        onChange={(e) => setPatientForm({...patientForm, id_number: e.target.value.replace(/\D/g, '')})}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Phone Number *</label>
+                    <input
+                      type="tel"
+                      required
+                      maxLength={10}
+                      placeholder="10-digit phone"
+                      value={patientForm.phone_number}
+                      onChange={(e) => setPatientForm({...patientForm, phone_number: e.target.value.replace(/\D/g, '')})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-650 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Email Address</label>
+                    <input
+                      type="email"
+                      placeholder="patient@hospital.com"
+                      value={patientForm.email}
+                      onChange={(e) => setPatientForm({...patientForm, email: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Portal Password *</label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Choose password"
+                      value={patientForm.password}
+                      onChange={(e) => setPatientForm({...patientForm, password: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Group 2: Address Info */}
+              <div className="space-y-4 pt-2">
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Address Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">House Number *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 14B"
+                      value={patientForm.house_number}
+                      onChange={(e) => setPatientForm({...patientForm, house_number: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Suburb *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Melville"
+                      value={patientForm.surbub}
+                      onChange={(e) => setPatientForm({...patientForm, surbub: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Municipality *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. City of Joburg"
+                      value={patientForm.municipality}
+                      onChange={(e) => setPatientForm({...patientForm, municipality: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">City *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Johannesburg"
+                      value={patientForm.city}
+                      onChange={(e) => setPatientForm({...patientForm, city: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Group 3: Next of Kin */}
+              <div className="space-y-4 pt-2">
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Next of Kin Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Kin Full Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Kin Name"
+                      value={patientForm.next_of_kin_fullname}
+                      onChange={(e) => setPatientForm({...patientForm, next_of_kin_fullname: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Kin Phone Number *</label>
+                    <input
+                      type="tel"
+                      required
+                      maxLength={10}
+                      placeholder="Kin Phone"
+                      value={patientForm.next_of_kin_phone}
+                      onChange={(e) => setPatientForm({...patientForm, next_of_kin_phone: e.target.value.replace(/\D/g, '')})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-semibold">Kin Email</label>
+                    <input
+                      type="email"
+                      placeholder="kin@email.com"
+                      value={patientForm.next_of_kin_email}
+                      onChange={(e) => setPatientForm({...patientForm, next_of_kin_email: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 placeholder-slate-655 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-4 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => { setIsModalOpen(false); setModalError(''); setModalSuccess(''); }}
+                  className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={modalLoading}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  {modalLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+                  {modalLoading ? 'Registering Patient...' : 'Register Patient'}
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
