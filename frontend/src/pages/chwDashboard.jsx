@@ -41,7 +41,7 @@ function ChwDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
     setProfileLoading(true);
     setProfileError('');
     try {
-      const res = await api.get(`${API_URL}/auth/profile`);
+      const res = await api.get('/auth/profile');
       if (res.data && res.data.profile) {
         setProfileData(res.data.profile);
         setProfileForm({
@@ -77,7 +77,7 @@ function ChwDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
     setProfileError('');
     setProfileSuccess('');
     try {
-      const res = await api.put(`${API_URL}/auth/profile`, profileForm);
+      const res = await api.put('auth/profile', profileForm);
       if (res.data && res.data.profile) {
         setProfileData(res.data.profile);
         setProfileSuccess('Profile updated successfully!');
@@ -97,7 +97,7 @@ function ChwDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
 
   const fetchHomeVisits = async () => {
     try {
-      const response = await api.get(`${API_URL}/auth/chw/home-visits`);
+      const response = await api.get('/auth/chw/home-visits');
       if (response.data && response.data.homeVisits) {
         setHomeVisits(response.data.homeVisits);
       }
@@ -113,7 +113,7 @@ function ChwDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
   const submitFulfillHomeVisit = async () => {
     if (!selectedVisitForFulfill || !visitNotes.trim()) return;
     try {
-      await api.post(`${API_URL}/auth/chw/home-visits/${selectedVisitForFulfill.id}/fulfill`, {
+      await api.post(`/auth/chw/home-visits/${selectedVisitForFulfill.id}/fulfill`, {
         visitNotes: visitNotes.trim()
       });
       fetchHomeVisits();
@@ -142,12 +142,12 @@ function ChwDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
 
     const initSocket = async () => {
       try {
-        const orgRes = await api.get(`${API_URL}/auth/my-organization`);
+        const orgRes = await api.get('/auth/my-organization');
         if (!active) return;
         const orgName = orgRes.data.organization;
         if (!orgName) return;
 
-        socketInstance = io(`${API_URL}`, { transports: ['websocket'] });
+        socketInstance = io(`${API_URL}`);
         
         socketInstance.on('connect', () => {
           socketInstance.emit('register-user', {
@@ -252,7 +252,7 @@ function ChwDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
   const fetchReferrals = async () => {
     setLoadingReferrals(true);
     try {
-      const response = await api.get(`${API_URL}/auth/referrals`);
+      const response = await api.get('/auth/referrals');
       if (response.data) {
         setReferrals({
           incoming: response.data.incoming || [],
@@ -268,13 +268,13 @@ function ChwDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
 
   const fetchChwOrganization = async () => {
     try {
-      const response = await api.get(`${API_URL}/auth/my-organization`);
+      const response = await api.get('/auth/my-organization');
       if (response.data && response.data.organization) {
         setChwOrganization(response.data.organization);
         setReferralForm(prev => ({ ...prev, organization_to: response.data.organization }));
         
         // Also fetch the staff for this organization immediately, since CHWs can only refer to their own org!
-        const staffRes = await api.get(`${API_URL}/auth/organizations/${encodeURIComponent(response.data.organization)}/staff`);
+        const staffRes = await api.get(`/auth/organizations/${encodeURIComponent(response.data.organization)}/staff`);
         if (staffRes.data && staffRes.data.staff) {
           setOrgStaffList(staffRes.data.staff);
         }
@@ -286,7 +286,7 @@ function ChwDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
 
   const fetchOrganizationPatients = async () => {
     try {
-      const response = await api.get(`${API_URL}/auth/organization-patients`);
+      const response = await api.get('/auth/organization-patients');
       if (response.data && response.data.patients) {
         setOrgPatientsList(response.data.patients);
       }
@@ -307,7 +307,7 @@ function ChwDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
         ...referralForm,
         organization_to: chwOrganization
       };
-      await api.post(`${API_URL}/auth/referrals`, payload);
+      await api.post('/auth/referrals', payload);
       setReferralModalSuccess('Referral created successfully!');
       fetchReferrals();
       setReferralForm({
@@ -388,7 +388,7 @@ function ChwDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
   const fetchPatients = async () => {
     setLoadingPatients(true);
     try {
-      const response = await api.get(`${API_URL}/auth/chw/patients`);
+      const response = await api.get('/auth/chw/patients');
       if (response.data && response.data.patients) {
         setPatients(response.data.patients);
       }
