@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+@theme {
+  --color-emerald-50: #f4fbf4;
+  --color-emerald-100: #e7f7e7;
+  --color-emerald-200: #c2ecc2;
+  --color-emerald-300: #9dde9d;
+  --color-emerald-400: #57c357;
+  --color-emerald-500: #388e3c; /* City of Tshwane Grass Green */
+  --color-emerald-600: #2e7d32; /* City of Tshwane Darker Green */
+  --color-emerald-700: #1b5e20;
+  --color-emerald-800: #123f15;
+  --color-emerald-900: #0b250d;
+  --color-emerald-950: #051206;
+
+  --color-teal-50: #fffde7;
+  --color-teal-100: #fff9c4;
+  --color-teal-200: #fff59d;
+  --color-teal-300: #fff176;
+  --color-teal-400: #ffee58;
+  --color-teal-500: #ffd600; /* City of Tshwane Accent Yellow */
+  --color-teal-600: #fdd835;
+  --color-teal-700: #fbc02d;
+  --color-teal-800: #f9a825;
+  --color-teal-900: #f57f17;
+  --color-teal-950: #e65100;
+}
+
+button {
+  @apply cursor-pointer;
+}
