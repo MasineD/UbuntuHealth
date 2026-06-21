@@ -843,10 +843,10 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
         {/* Top Branding Section */}
         <div>
           <div className="p-6 border-b border-slate-800/80 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <Users className="h-5 w-5 text-slate-950 stroke-[2.5]" />
+            <div className="h-10 w-10 rounded-xl bg-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <Activity className="h-5 w-5 text-slate-950 stroke-[2.5]" />
             </div>
-            <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
+            <span className="font-extrabold text-xl tracking-tight bg-emerald-400 to-teal-300 bg-clip-text text-transparent">
               UbuntuHealth
             </span>
           </div>
@@ -884,7 +884,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
                   onClick={() => setActiveTab(item.id)}
                   className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all duration-300 ${
                     isActive 
-                      ? 'bg-gradient-to-r from-emerald-500/15 to-teal-500/5 text-emerald-400 border border-emerald-500/20' 
+                      ? 'bg-emerald-500/15 to-teal-500/5 text-emerald-400 border border-emerald-500/20' 
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
                   }`}
                 >
@@ -1013,7 +1013,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
             <div className="space-y-6">
               
               {/* Portal Welcome Notification Banner */}
-              <div className="bg-gradient-to-r from-emerald-950/30 to-slate-900/30 border border-emerald-500/20 rounded-3xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="bg-emerald-950/30 to-slate-900/30 border border-emerald-500/20 rounded-3xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="space-y-1">
                   <h2 className="text-xl font-bold text-slate-100">Welcome Back to Clinical Hub</h2>
                   <p className="text-slate-400 text-xs">Verify medical routines, follow ups, and chat rooms in real-time.</p>
@@ -1405,7 +1405,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
                     onClick={() => setAppointmentGroup('our-patients')}
                     className={`py-1.5 px-4 rounded-lg font-bold text-xs transition-all duration-300 ${
                       appointmentGroup !== 'new-patients'
-                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/10'
+                        ? 'bg-emerald-500 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/10'
                         : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/20'
                     }`}
                   >
@@ -1415,7 +1415,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
                     onClick={() => setAppointmentGroup('new-patients')}
                     className={`py-1.5 px-4 rounded-lg font-bold text-xs transition-all duration-300 ${
                       appointmentGroup === 'new-patients'
-                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/10'
+                        ? 'bg-emerald-500 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/10'
                         : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/20'
                     }`}
                   >
@@ -1946,7 +1946,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
                 <button
                   type="submit"
                   disabled={modalLoading}
-                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
                 >
                   {modalLoading && <Loader2 className="h-5 w-5 animate-spin" />}
                   {modalLoading ? 'Registering Patient...' : 'Register Patient'}
@@ -2152,7 +2152,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
                 <button
                   type="submit"
                   disabled={chwModalLoading}
-                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
                 >
                   {chwModalLoading && <Loader2 className="h-5 w-5 animate-spin" />}
                   {chwModalLoading ? 'Registering CHW...' : 'Register CHW'}
@@ -2370,7 +2370,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
                 <button
                   type="submit"
                   disabled={staffModalLoading}
-                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
                 >
                   {staffModalLoading && <Loader2 className="h-5 w-5 animate-spin" />}
                   {staffModalLoading ? 'Registering Staff...' : 'Register Staff Member'}
@@ -2488,156 +2488,6 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
               </button>
             </div>
 
-          </div>
-        </div>
-      )}
-
-      {/* ================= PROFILE MODAL ================= */}
-      {isProfileModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
-            
-            {/* Close Button */}
-            <button 
-              onClick={() => setIsProfileModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
-            >
-              <X className="h-6 w-6" />
-            </button>
-
-            <div className="border-b border-slate-800 pb-4">
-              <h2 className="text-xl font-bold text-white">Admin Profile</h2>
-              <p className="text-slate-400 text-xs mt-1">Manage and view your user profile details.</p>
-            </div>
-
-            {profileLoading ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 text-emerald-500 animate-spin mb-2" />
-                <p className="text-xs text-slate-400">Loading profile details...</p>
-              </div>
-            ) : profileError ? (
-              <div className="p-4 bg-red-950/30 border border-red-500/20 rounded-2xl flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-sm font-bold text-red-200">Error</h4>
-                  <p className="text-xs text-red-400 mt-1">{profileError}</p>
-                  <button 
-                    type="button"
-                    onClick={fetchProfile}
-                    className="mt-2 text-xs font-semibold text-emerald-400 hover:underline"
-                  >
-                    Retry
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleSaveProfile} className="space-y-6">
-                {profileSuccess && (
-                  <div className="p-4 bg-emerald-950/30 border border-emerald-500/20 rounded-2xl flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-emerald-400 shrink-0" />
-                    <p className="text-xs text-emerald-300 font-semibold">{profileSuccess}</p>
-                  </div>
-                )}
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Full Name</label>
-                    <input
-                      type="text"
-                      required
-                      disabled={!isEditingProfile}
-                      value={profileForm.fullname}
-                      onChange={(e) => setProfileForm({ ...profileForm, fullname: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-medium transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Phone Number</label>
-                    <input
-                      type="text"
-                      required
-                      disabled={!isEditingProfile}
-                      value={profileForm.phone_number}
-                      onChange={(e) => setProfileForm({ ...profileForm, phone_number: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-mono transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Email Address</label>
-                    <input
-                      type="email"
-                      required
-                      disabled={!isEditingProfile}
-                      value={profileForm.email}
-                      onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-800/80">
-                    <div>
-                      <span className="text-[10px] text-slate-500 block font-semibold uppercase mb-1">Identity Number (Uneditable)</span>
-                      <div className="bg-slate-950/60 border border-slate-800/50 rounded-xl px-4 py-2.5 text-sm text-slate-400 font-mono select-none">
-                        {profileData?.identity || '—'}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-500 block font-semibold uppercase mb-1">Organization (Uneditable)</span>
-                      <div className="bg-slate-950/60 border border-slate-800/50 rounded-xl px-4 py-2.5 text-sm text-slate-400 font-medium select-none">
-                        {profileData?.organization || '—'}
-                      </div>
-                    </div>
-                    <div className="md:col-span-2">
-                      <span className="text-[10px] text-slate-550 block font-semibold uppercase mb-1">Facility Code (Uneditable)</span>
-                      <div className="bg-slate-950/60 border border-slate-800/50 rounded-xl px-4 py-2.5 text-sm text-slate-400 font-mono select-none">
-                        {profileData?.facility_code || '—'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
-                  {isEditingProfile ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsEditingProfile(false);
-                          setProfileForm({
-                            fullname: profileData?.fullname || '',
-                            phone_number: profileData?.phone_number || '',
-                            email: profileData?.email || ''
-                          });
-                          setProfileError('');
-                          setProfileSuccess('');
-                        }}
-                        className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition-all duration-300"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={profileSaving}
-                        className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-sm transition-all duration-300 flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20"
-                      >
-                        {profileSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                        Save Changes
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingProfile(true)}
-                      className="px-6 py-2.5 bg-slate-850 border border-slate-700/60 hover:bg-slate-800 text-emerald-400 font-bold rounded-xl text-sm transition-all duration-300"
-                    >
-                      Edit Profile
-                    </button>
-                  )}
-                </div>
-              </form>
-            )}
           </div>
         </div>
       )}
@@ -2826,7 +2676,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
                 <button
                   type="submit"
                   disabled={referralModalLoading}
-                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
                 >
                   {referralModalLoading && <Loader2 className="h-5 w-5 animate-spin" />}
                   {referralModalLoading ? 'Creating Referral...' : 'Create Referral'}
@@ -2914,7 +2764,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
                 <button
                   type="button"
                   onClick={submitScheduleHomeVisit}
-                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all"
+                  className="flex-1 py-3 bg-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all"
                 >
                   Schedule
                 </button>
