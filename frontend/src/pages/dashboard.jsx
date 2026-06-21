@@ -5,8 +5,9 @@ import { LayoutDashboard, Users, Calendar, ArrowLeftRight, MessageSquare, LogOut
 import { io } from 'socket.io-client';
 import ChatRoom from '../components/ChatRoom';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: `${API_URL}/api`,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
@@ -96,7 +97,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
         const orgName = orgRes.data.organization;
         if (!orgName) return;
 
-        socketInstance = io('http://localhost:5000');
+        socketInstance = io(`${API_URL}`, { transports: ['websocket'] });
         
         socketInstance.on('connect', () => {
           socketInstance.emit('register-user', {
