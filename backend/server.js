@@ -14,6 +14,7 @@ import appointmentsRoutes from './routes/appointments.js';
 import chatRoutes from './routes/chat.js';
 import dotenv from 'dotenv';
 import pool from './config/database.js';
+import { sendSMS, sendSMSNotification } from './utils/sms.js';
 
 dotenv.config();
 
@@ -164,6 +165,7 @@ async function autoScheduleHomeVisit(alertId, patientId, orgName, reason) {
       }
     };
     io.to(`org_${orgName}_user_chw_${chwId}`).emit('new-notification', chwNotification);
+    await sendSMSNotification('chw', chwId, chwNotification.message);
 
     // Notify Patient
     const patientNotification = {
@@ -173,6 +175,7 @@ async function autoScheduleHomeVisit(alertId, patientId, orgName, reason) {
       timestamp: new Date().toISOString()
     };
     io.to(`org_${orgName}_user_patient_${patient.id}`).emit('new-notification', patientNotification);
+    await sendSMSNotification('patient', patient.id, patientNotification.message);
   } catch (err) {
     console.error('Error in autoScheduleHomeVisit:', err.message);
   }
@@ -191,7 +194,7 @@ const startMedicationChecker = () => {
       if (now.getSeconds() < 15) {
         // Query patients on treatment who have a matching medication time today
         const patientsRes = await pool.query(
-          `SELECT p.id, p.fullname, a.organization, hr.morning_time, hr.midday_time, hr.evening_time
+          `SELECT p.id, p.fullname, p.phone_number, a.organization, hr.morning_time, hr.midday_time, hr.evening_time
            FROM users.patients p
            JOIN users.admins a ON p.registra_id = a.id
            JOIN patients.health_records hr ON p.id = hr.patient_id
@@ -230,6 +233,9 @@ const startMedicationChecker = () => {
                 timestamp: new Date().toISOString()
               };
               io.to(`org_${org}_user_patient_${patientId}`).emit('new-notification', notificationData);
+              if (row.phone_number) {
+                await sendSMS(row.phone_number, notificationData.message);
+              }
             }
           }
         }
@@ -315,6 +321,7 @@ const startMedicationChecker = () => {
                   }
                 };
                 io.to(`org_${org}_role_admin`).emit('new-notification', alertPayload);
+                await sendSMSNotification('admin', org, alertPayload.message);
               }
             }
           }
@@ -396,8 +403,9 @@ const startRoutineChecker = () => {
               title: 'Upcoming Routine Task',
               message: `Reminder: You have a scheduled "${routine.description}" at ${routine.time.substring(0, 5)} today.`,
               timestamp: new Date().toISOString()
-            };
+             };
             io.to(`org_${routine.organization}_user_patient_${routine.patient_id}`).emit('new-notification', notificationData);
+            await sendSMSNotification('patient', routine.patient_id, notificationData.message);
             sentPatientRoutineNotifications.add(key);
           }
         }
@@ -450,6 +458,7 @@ const startRoutineChecker = () => {
                   }
                 };
                 io.to(`org_${routine.organization}_role_admin`).emit('new-notification', alertPayload);
+                await sendSMSNotification('admin', routine.organization, alertPayload.message);
               }
             }
           }

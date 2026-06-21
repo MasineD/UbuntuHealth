@@ -393,10 +393,10 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
         {/* Top Branding Section */}
         <div>
           <div className="p-6 border-b border-slate-800/80 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+            <div className="h-10 w-10 rounded-xl bg-emerald-500 to-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
               <Activity className="h-5 w-5 text-slate-950 stroke-[2.5]" />
             </div>
-            <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
+            <span className="font-extrabold text-xl tracking-tight bg-emerald-400 to-teal-300 bg-clip-text text-transparent">
               UbuntuHealth
             </span>
           </div>
@@ -404,21 +404,15 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
           {/* User Details Block */}
           <div className="p-6 border-b border-slate-800/80 bg-slate-950/30">
             <div className="flex items-center gap-4">
-              <div className="h-11 w-11 rounded-full bg-slate-800 flex items-center justify-center text-sm font-extrabold border border-slate-700 text-teal-400 shrink-0">
+              <div className="h-11 w-11 rounded-full bg-slate-800 flex items-center justify-center text-sm font-extrabold border border-slate-700 text-emerald-400 shrink-0">
                 {user.name ? user.name.split(' ').map(n=>n[0]).join('').toUpperCase() : 'PT'}
               </div>
               <div className="overflow-hidden">
                 <h3 className="font-bold text-slate-200 text-sm truncate">{user.name}</h3>
                 <p className="text-slate-500 text-xs truncate mb-1">{user.email || 'No email registered'}</p>
-                <span className="inline-block bg-teal-500/10 text-teal-400 border border-teal-500/20 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
+                <span className="inline-block bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
                   Patient
                 </span>
-                <button
-                  onClick={() => setIsProfileModalOpen(true)}
-                  className="mt-1.5 text-xs text-teal-400 hover:text-teal-300 font-semibold underline block text-left transition-colors duration-200"
-                >
-                  View Profile
-                </button>
               </div>
             </div>
             {/* ID Number display */}
@@ -439,11 +433,11 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
                   onClick={() => setActiveTab(item.id)}
                   className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all duration-300 ${
                     isActive 
-                      ? 'bg-gradient-to-r from-teal-500/15 to-emerald-500/5 text-teal-400 border border-teal-500/20' 
+                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20' 
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
                   }`}
                 >
-                  <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-teal-400' : 'text-slate-400'}`} />
+                  <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
                   {item.name}
                   {item.id === 'chat' && notifications.some(n => n.type === 'message') && (
                     <span className="ml-auto bg-teal-500 text-slate-950 rounded-full text-[10px] font-extrabold px-1.5 py-0.5 animate-pulse">
@@ -496,10 +490,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
 
           <div className="flex items-center gap-4">
             {/* Status indicators */}
-            <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-teal-500/10 border border-teal-500/20 rounded-full text-teal-400 text-xs font-semibold">
-              <ShieldCheck className="h-4 w-4" />
-              Patient HIPAA Secured
-            </div>
+            
             
             {/* Notification Badge */}
             <div className="relative">
@@ -516,7 +507,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
               </button>
               
               {showNotificationsDropdown && (
-                <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-850 rounded-2xl p-4 shadow-2xl text-left animate-slideIn">
+                <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-850 rounded-2xl p-4 shadow-2xl z-50 text-left animate-slideIn">
                   <div className="flex justify-between items-center pb-2.5 border-b border-slate-800">
                     <span className="text-xs font-bold text-slate-200">Alerts & Notifications</span>
                     <button 
@@ -570,7 +561,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
             <div className="space-y-6">
               
               {/* Patient Welcome Banner */}
-              <div className="bg-gradient-to-r from-teal-950/30 to-slate-900/30 border border-teal-500/20 rounded-3xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className=" rounded-3xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="space-y-1">
                   <h2 className="text-xl font-bold text-slate-100">Hello, {user.name.split(' ')[0]}</h2>
                   <p className="text-slate-400 text-xs">Stay on track with your routines, consultations, and medical records.</p>
@@ -612,7 +603,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
                     <h3 className="font-bold text-slate-200">Routines for Today</h3>
                     <button 
                       onClick={() => setActiveTab('routines')}
-                      className="text-xs text-teal-400 hover:text-teal-300 font-semibold"
+                      className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold"
                     >
                       Manage Routines
                     </button>
@@ -712,7 +703,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
                   <div key={`med-tab-${log.id}`} className="py-4 flex items-center justify-between first:pt-0 last:pb-0">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <Clock className="h-4.5 w-4.5 text-rose-400" />
+                        <Clock className="h-4.5 w-4.5 text-emerald-400" />
                         <span className="font-bold text-slate-200 text-sm">
                           {log.scheduled_time ? log.scheduled_time.substring(0, 5) : ''}
                         </span>
@@ -889,7 +880,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
                 </div>
                 <button
                   onClick={() => setShowModal(true)}
-                  className="py-2.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-110 active:scale-[0.98] text-slate-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-500/10 cursor-pointer"
+                  className="py-2.5 px-4 bg-emerald-500 hover:brightness-110 active:scale-[0.98] text-slate-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-500/10 cursor-pointer"
                 >
                   <Plus className="h-4.5 w-4.5 stroke-[2.5]" /> Book Appointment
                 </button>
@@ -968,270 +959,6 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
         </section>
       </main>
 
-      {/* ================= PROFILE MODAL ================= */}
-      {isProfileModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl relative animate-scaleUp">
-            
-            {/* Close Button */}
-            <button 
-              onClick={() => setIsProfileModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
-            >
-              <X className="h-6 w-6" />
-            </button>
-
-            <div className="border-b border-slate-800 pb-4">
-              <h2 className="text-xl font-bold text-white">Profile Details</h2>
-              <p className="text-slate-400 text-xs mt-1">Manage and view your user profile details.</p>
-            </div>
-
-            {profileLoading ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 text-teal-500 animate-spin mb-2" />
-                <p className="text-xs text-slate-400">Loading profile details...</p>
-              </div>
-            ) : profileError ? (
-              <div className="p-4 bg-red-950/30 border border-red-500/20 rounded-2xl flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-sm font-bold text-red-200">Error</h4>
-                  <p className="text-xs text-red-400 mt-1">{profileError}</p>
-                  <button 
-                    type="button"
-                    onClick={fetchProfile}
-                    className="mt-2 text-xs font-semibold text-teal-400 hover:underline"
-                  >
-                    Retry
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleSaveProfile} className="space-y-6">
-                {profileSuccess && (
-                  <div className="p-4 bg-teal-950/30 border border-teal-500/20 rounded-2xl flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-teal-400 shrink-0" />
-                    <p className="text-xs text-teal-300 font-semibold">{profileSuccess}</p>
-                  </div>
-                )}
-
-                <div className="space-y-6">
-                  {/* Personal Information */}
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-semibold text-teal-400 uppercase tracking-wider">Personal Information</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Full Name</label>
-                        <input
-                          type="text"
-                          required
-                          disabled={!isEditingProfile}
-                          value={profileForm.fullname}
-                          onChange={(e) => setProfileForm({ ...profileForm, fullname: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-medium transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Gender</label>
-                        <select
-                          required
-                          disabled={!isEditingProfile}
-                          value={profileForm.gender}
-                          onChange={(e) => setProfileForm({ ...profileForm, gender: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-medium transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
-                        >
-                          <option value="">Select Gender</option>
-                          <option value="Male">Male</option>
-                          <option value="Female">Female</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Contact & Address */}
-                  <div className="space-y-4 pt-4 border-t border-slate-800/80">
-                    <h3 className="text-xs font-semibold text-teal-400 uppercase tracking-wider">Contact & Address</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Email Address</label>
-                        <input
-                          type="email"
-                          disabled={!isEditingProfile}
-                          value={profileForm.email}
-                          onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Phone Number</label>
-                        <input
-                          type="text"
-                          required
-                          disabled={!isEditingProfile}
-                          value={profileForm.phone_number}
-                          onChange={(e) => setProfileForm({ ...profileForm, phone_number: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-mono transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">House Number</label>
-                        <input
-                          type="text"
-                          disabled={!isEditingProfile}
-                          value={profileForm.house_number}
-                          onChange={(e) => setProfileForm({ ...profileForm, house_number: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Suburb</label>
-                        <input
-                          type="text"
-                          disabled={!isEditingProfile}
-                          value={profileForm.surbub}
-                          onChange={(e) => setProfileForm({ ...profileForm, surbub: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Municipality</label>
-                        <input
-                          type="text"
-                          disabled={!isEditingProfile}
-                          value={profileForm.municipality}
-                          onChange={(e) => setProfileForm({ ...profileForm, municipality: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">City</label>
-                        <input
-                          type="text"
-                          disabled={!isEditingProfile}
-                          value={profileForm.city}
-                          onChange={(e) => setProfileForm({ ...profileForm, city: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Next of Kin */}
-                  <div className="space-y-4 pt-4 border-t border-slate-800/80">
-                    <h3 className="text-xs font-semibold text-teal-400 uppercase tracking-wider">Next of Kin details</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Next of Kin Full Name</label>
-                        <input
-                          type="text"
-                          required
-                          disabled={!isEditingProfile}
-                          value={profileForm.next_of_kin_fullname}
-                          onChange={(e) => setProfileForm({ ...profileForm, next_of_kin_fullname: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-medium transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Next of Kin Phone</label>
-                        <input
-                          type="text"
-                          required
-                          disabled={!isEditingProfile}
-                          value={profileForm.next_of_kin_phone}
-                          onChange={(e) => setProfileForm({ ...profileForm, next_of_kin_phone: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 font-mono transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
-                        />
-                      </div>
-
-                      <div className="md:col-span-2">
-                        <label className="text-[10px] text-slate-400 block font-semibold uppercase mb-1">Next of Kin Email</label>
-                        <input
-                          type="email"
-                          disabled={!isEditingProfile}
-                          value={profileForm.next_of_kin_email}
-                          onChange={(e) => setProfileForm({ ...profileForm, next_of_kin_email: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 transition-all duration-300 disabled:opacity-50 disabled:bg-slate-950/40"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Systemic Fields */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-800/80">
-                    <div>
-                      <span className="text-[10px] text-slate-555 block font-semibold uppercase mb-1">Identity Number (Uneditable)</span>
-                      <div className="bg-slate-950/60 border border-slate-800/50 rounded-xl px-4 py-2.5 text-sm text-slate-400 font-mono select-none">
-                        {profileData?.id_number || '—'}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-555 block font-semibold uppercase mb-1">Organization (Uneditable)</span>
-                      <div className="bg-slate-950/60 border border-slate-800/50 rounded-xl px-4 py-2.5 text-sm text-slate-400 font-medium select-none">
-                        {profileData?.organization || '—'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
-                  {isEditingProfile ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsEditingProfile(false);
-                          setProfileForm({
-                            fullname: profileData?.fullname || '',
-                            gender: profileData?.gender || '',
-                            email: profileData?.email || '',
-                            phone_number: profileData?.phone_number || '',
-                            house_number: profileData?.house_number || '',
-                            surbub: profileData?.surbub || '',
-                            municipality: profileData?.municipality || '',
-                            city: profileData?.city || '',
-                            next_of_kin_fullname: profileData?.next_of_kin_fullname || '',
-                            next_of_kin_email: profileData?.next_of_kin_email || '',
-                            next_of_kin_phone: profileData?.next_of_kin_phone || ''
-                          });
-                          setProfileError('');
-                          setProfileSuccess('');
-                        }}
-                        className="px-5 py-2.5 bg-slate-880 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition-all duration-300"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={profileSaving}
-                        className="px-5 py-2.5 bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-sm transition-all duration-300 flex items-center justify-center gap-1.5 shadow-lg shadow-teal-500/20"
-                      >
-                        {profileSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                        Save Changes
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingProfile(true)}
-                      className="px-6 py-2.5 bg-slate-850 border border-slate-700/60 hover:bg-slate-800 text-teal-400 font-bold rounded-xl text-sm transition-all duration-300"
-                    >
-                      Edit Profile
-                    </button>
-                  )}
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
       {/* ================= BOOKING MODAL ================= */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto animate-fadeIn">
@@ -1413,7 +1140,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
               <button
                 type="submit"
                 disabled={bookingLoading}
-                className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-110 active:scale-[0.98] text-slate-950 font-bold text-xs tracking-wider uppercase rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
+                className="w-full py-3 bg-emerald-500 hover:brightness-110 active:scale-[0.98] text-slate-950 font-bold text-xs tracking-wider uppercase rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
               >
                 {bookingLoading && <Loader2 className="h-4 w-4 animate-spin text-slate-950" />}
                 {bookingLoading ? 'Requesting...' : 'Request Slot'}
@@ -1430,9 +1157,9 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
           <div key={toast.id} className="pointer-events-auto bg-slate-900/90 border border-slate-800 backdrop-blur-md rounded-2xl p-4 shadow-2xl flex items-start gap-3.5 animate-slideIn">
             <div className={`p-2 rounded-xl shrink-0 ${
               toast.type === 'message' 
-                ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20' 
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
                 : toast.type === 'referral' 
-                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20'
                   : toast.type === 'medication'
                     ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
                     : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'

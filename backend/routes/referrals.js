@@ -2,6 +2,7 @@ import express from 'express';
 import pool from '../config/database.js';
 import protect from '../middleware/auth.js';
 import crypto from 'crypto';
+import { sendSMSNotification } from '../utils/sms.js';
 
 const router = express.Router();
 
@@ -126,6 +127,7 @@ router.post('/referrals', protect, async (req, res) => {
                 );
                 const patientOrg = patientOrgRes.rows[0]?.organization || org;
                 io.to(`org_${patientOrg}_user_patient_${patientId}`).emit('new-notification', notificationData);
+                await sendSMSNotification('patient', patientId, notificationData.message);
             }
 
             // Notify target clinician if assigned
@@ -135,12 +137,15 @@ router.post('/referrals', protect, async (req, res) => {
                     [staff_to]
                 );
                 if (staffRes.rows.length > 0) {
-                    io.to(`org_${org}_user_staff_${staffRes.rows[0].id}`).emit('new-notification', notificationData);
+                    const staffId = staffRes.rows[0].id;
+                    io.to(`org_${org}_user_staff_${staffId}`).emit('new-notification', notificationData);
+                    await sendSMSNotification('staff', staffId, notificationData.message);
                 }
             }
 
             // Notify target admin
             io.to(`org_${org}_role_admin`).emit('new-notification', notificationData);
+            await sendSMSNotification('admin', org, notificationData.message);
         }
 
         return res.status(201).json({ message: 'Referral created successfully', referral });
