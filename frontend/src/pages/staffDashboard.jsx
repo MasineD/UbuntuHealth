@@ -8,6 +8,7 @@ import {
 import { io } from 'socket.io-client';
 import ChatRoom from '../components/ChatRoom';
 
+
 const api = axios.create({
   baseURL: 'http://localhost:5000/api',
   withCredentials: true,
@@ -606,10 +607,10 @@ function StaffDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
         <div>
           {/* Top Branding Section */}
           <div className="p-6 border-b border-slate-800/80 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <ShieldCheck className="h-5 w-5 text-slate-950 stroke-[2.5]" />
+            <div className="h-10 w-10 rounded-xl bg-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <Activity className="h-5 w-5 text-slate-950 stroke-[2.5]" />
             </div>
-            <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
+            <span className="font-extrabold text-xl tracking-tight bg-emerald-400 to-teal-300 bg-clip-text text-transparent">
               UbuntuHealth
             </span>
           </div>
@@ -617,7 +618,7 @@ function StaffDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
           {/* User Details Block */}
           <div className="p-6 border-b border-slate-800/80 bg-slate-950/30">
             <div className="flex items-center gap-4">
-              <div className="h-11 w-11 rounded-full bg-slate-800 flex items-center justify-center text-sm font-extrabold border border-slate-700 text-teal-400 shrink-0">
+              <div className="h-11 w-11 rounded-full bg-slate-800 flex items-center justify-center text-sm font-extrabold border border-slate-700 text-emerald-400 shrink-0">
                 {user.name ? user.name.split(' ').map(n=>n[0]).join('').toUpperCase() : 'CS'}
               </div>
               <div className="overflow-hidden">
@@ -626,12 +627,12 @@ function StaffDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
                 <span className="inline-block bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
                   {user.staff_role || 'Staff'}
                 </span>
-                <button
+                {/* <button
                   onClick={() => setIsProfileModalOpen(true)}
                   className="mt-1.5 text-xs text-emerald-400 hover:text-emerald-300 font-semibold underline block text-left transition-colors duration-200"
                 >
                   View Profile
-                </button>
+                </button> */}
               </div>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-800/60 text-[11px] text-slate-500 flex justify-between items-center">
@@ -651,7 +652,7 @@ function StaffDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
                   onClick={() => setActiveTab(item.id)}
                   className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all duration-300 ${
                     isActive 
-                      ? 'bg-gradient-to-r from-emerald-500/15 to-teal-500/5 text-emerald-400 border border-emerald-500/20' 
+                      ? 'bg-emerald-500/15 to-teal-500/5 text-emerald-400 border border-emerald-500/20' 
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
                   }`}
                 >
@@ -699,10 +700,6 @@ function StaffDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-400 text-xs font-semibold">
-              <ShieldCheck className="h-4 w-4" />
-              Clinical Session Secure
-            </div>
             
             <div className="relative">
               <button 
@@ -1819,7 +1816,7 @@ function StaffDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
                       <button
                         type="button"
                         onClick={() => setIsEditingHealthRecord(true)}
-                        className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all"
+                        className="flex-1 py-3 bg-emerald-500 to-teal-500 text-slate-950 font-bold rounded-xl hover:brightness-110 active:scale-95 transition-all"
                       >
                         Edit Health Record
                       </button>

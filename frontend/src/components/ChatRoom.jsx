@@ -317,7 +317,7 @@ function ChatRoom({ user, socket }) {
                       onClick={() => setActiveChat({ type: 'channel', id: ch.id })}
                       className={`w-full flex items-start gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${
                         isActive
-                          ? 'bg-gradient-to-r from-emerald-500/15 to-teal-500/5 text-emerald-400 border border-emerald-500/20 shadow-md'
+                          ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 shadow-md'
                           : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'
                       }`}
                     >
@@ -365,7 +365,7 @@ function ChatRoom({ user, socket }) {
                       onClick={() => setActiveChat({ type: 'dm', id: u.id, role: u.role })}
                       className={`w-full flex items-start gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold tracking-wide text-left transition-all ${
                         isActive
-                          ? 'bg-gradient-to-r from-emerald-500/15 to-teal-500/5 text-emerald-400 border border-emerald-500/20 shadow-md'
+                          ? 'bg-emerald-500/15 to-teal-500/5 text-emerald-400 border border-emerald-500/20 shadow-md'
                           : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'
                       }`}
                     >
@@ -443,7 +443,7 @@ function ChatRoom({ user, socket }) {
                   </div>
                   <div className={`p-3 rounded-2xl text-xs leading-relaxed ${
                     isSelf 
-                      ? 'bg-gradient-to-tr from-emerald-500 to-teal-500 text-slate-950 font-medium rounded-tr-none' 
+                      ? 'bg-emerald-500 to-teal-500 text-slate-950 font-medium rounded-tr-none' 
                       : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'
                   }`}>
                     {msg.message_text}
@@ -467,7 +467,7 @@ function ChatRoom({ user, socket }) {
           />
           <button
             type="submit"
-            className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 hover:brightness-110 active:scale-95 transition-all duration-300"
+            className="h-10 w-10 shrink-0 rounded-xl bg-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 hover:brightness-110 active:scale-95 transition-all duration-300"
           >
             <Send className="h-4.5 w-4.5" />
           </button>

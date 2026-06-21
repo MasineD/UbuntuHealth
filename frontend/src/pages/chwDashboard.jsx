@@ -434,10 +434,10 @@ function ChwDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
         <div>
           {/* Top Branding Section */}
           <div className="p-6 border-b border-slate-800/80 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+            <div className="h-10 w-10 rounded-xl bg-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
               <Activity className="h-5 w-5 text-slate-950 stroke-[2.5]" />
             </div>
-            <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
+            <span className="font-extrabold text-xl tracking-tight bg-emerald-400 to-teal-300 bg-clip-text text-transparent">
               UbuntuHealth
             </span>
           </div>
@@ -445,21 +445,15 @@ function ChwDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
           {/* User Details Block */}
           <div className="p-6 border-b border-slate-800/80 bg-slate-950/30">
             <div className="flex items-center gap-4">
-              <div className="h-11 w-11 rounded-full bg-slate-800 flex items-center justify-center text-sm font-extrabold border border-slate-700 text-teal-400 shrink-0">
+              <div className="h-11 w-11 rounded-full bg-slate-800 flex items-center justify-center text-sm font-extrabold border border-slate-700 text-emerald-400 shrink-0">
                 {user.name ? user.name.split(' ').map(n=>n[0]).join('').toUpperCase() : 'CHW'}
               </div>
               <div className="overflow-hidden">
                 <h3 className="font-bold text-slate-200 text-sm truncate">{user.name}</h3>
                 <p className="text-slate-500 text-xs truncate mb-1">{user.email || 'No email registered'}</p>
-                <span className="inline-block bg-teal-500/10 text-teal-400 border border-teal-500/20 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
+                <span className="inline-block bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
                   Health Worker
                 </span>
-                <button
-                  onClick={() => setIsProfileModalOpen(true)}
-                  className="mt-1.5 text-xs text-teal-400 hover:text-teal-300 font-semibold underline block text-left transition-colors duration-200"
-                >
-                  View Profile
-                </button>
               </div>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-800/60 text-[11px] text-slate-500 flex justify-between items-center">
@@ -479,11 +473,11 @@ function ChwDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
                   onClick={() => setActiveTab(item.id)}
                   className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all duration-300 ${
                     isActive 
-                      ? 'bg-gradient-to-r from-teal-500/15 to-emerald-500/5 text-teal-400 border border-teal-500/20' 
+                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20' 
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
                   }`}
                 >
-                  <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-teal-400' : 'text-slate-400'}`} />
+                  <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
                   {item.name}
                   {item.id === 'chat' && notifications.some(n => n.type === 'message') && (
                     <span className="ml-auto bg-teal-550 text-slate-950 rounded-full text-[10px] font-extrabold px-1.5 py-0.5 animate-pulse">
@@ -527,10 +521,6 @@ function ChwDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-teal-500/10 border border-teal-500/20 rounded-full text-teal-400 text-xs font-semibold">
-              <ShieldCheck className="h-4 w-4" />
-              Facility Secured
-            </div>
             
             <div className="relative">
               <button 
