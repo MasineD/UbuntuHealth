@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import pool from '../config/database.js';
 import protect from '../middleware/auth.js';
+import { sendSMSNotification } from '../utils/sms.js';
 
 const router = express.Router();
 
@@ -491,6 +492,7 @@ router.post('/admin/compliance-alerts/:id/schedule-visit', protect, async (req, 
                 }
             };
             io.to(`org_${org}_user_chw_${chwId}`).emit('new-notification', chwNotification);
+            await sendSMSNotification('chw', chwId, chwNotification.message);
 
             // Notify Patient
             const patientNotification = {
@@ -500,6 +502,7 @@ router.post('/admin/compliance-alerts/:id/schedule-visit', protect, async (req, 
                 timestamp: new Date().toISOString()
             };
             io.to(`org_${org}_user_patient_${patient.id}`).emit('new-notification', patientNotification);
+            await sendSMSNotification('patient', patient.id, patientNotification.message);
         }
 
         return res.json({ message: 'Home visit scheduled successfully', alert });

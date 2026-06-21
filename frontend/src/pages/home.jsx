@@ -185,7 +185,7 @@ function Home({
         <div className="lg:w-1/2 flex flex-col justify-center space-y-8 text-left animate-fadeIn">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white leading-tight font-sans tracking-tight">
             Healthcare for Everyone, <br />
-            <span className="text-teal-500">Everywhere</span>
+            <span className="text-emerald-500">Everywhere</span>
           </h1>
           
           <p className="text-slate-400 text-sm md:text-base leading-relaxed max-w-lg">

@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import pool from '../config/database.js';
 import protect from '../middleware/auth.js';
 import crypto from 'crypto';
+import { sendSMSNotification } from '../utils/sms.js';
 
 const router = express.Router();
 
@@ -217,6 +218,7 @@ router.put('/appointments/:id/status', protect, async (req, res) => {
             // Notify patient if registered
             if (appointment.patient_id) {
                 io.to(`org_${org}_user_patient_${appointment.patient_id}`).emit('new-notification', notificationData);
+                await sendSMSNotification('patient', appointment.patient_id, notificationData.message);
             }
 
             // Notify clinician if assigned
@@ -226,12 +228,15 @@ router.put('/appointments/:id/status', protect, async (req, res) => {
                     [appointment.staff_to]
                 );
                 if (staffRes.rows.length > 0) {
-                    io.to(`org_${org}_user_staff_${staffRes.rows[0].id}`).emit('new-notification', notificationData);
+                    const staffId = staffRes.rows[0].id;
+                    io.to(`org_${org}_user_staff_${staffId}`).emit('new-notification', notificationData);
+                    await sendSMSNotification('staff', staffId, notificationData.message);
                 }
             }
 
             // Notify admin
             io.to(`org_${org}_role_admin`).emit('new-notification', notificationData);
+            await sendSMSNotification('admin', org, notificationData.message);
         }
 
         return res.json({ message: `Appointment status updated to ${status}` });
