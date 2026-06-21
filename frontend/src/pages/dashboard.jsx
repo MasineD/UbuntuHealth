@@ -33,7 +33,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
     setProfileLoading(true);
     setProfileError('');
     try {
-      const res = await api.get(`${API_URL}/auth/profile`);
+      const res = await api.get('/auth/profile');
       if (res.data && res.data.profile) {
         setProfileData(res.data.profile);
         setProfileForm({
@@ -64,7 +64,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
     setProfileError('');
     setProfileSuccess('');
     try {
-      const res = await api.put(`${API_URL}/auth/profile`, profileForm);
+      const res = await api.put('/auth/profile', profileForm);
       if (res.data && res.data.profile) {
         setProfileData(res.data.profile);
         setProfileSuccess('Profile updated successfully!');
@@ -92,12 +92,12 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
 
     const initSocket = async () => {
       try {
-        const orgRes = await api.get(`${API_URL}/auth/my-organization`);
+        const orgRes = await api.get('/auth/my-organization');
         if (!active) return;
         const orgName = orgRes.data.organization;
         if (!orgName) return;
 
-        socketInstance = io(`${API_URL}`, { transports: ['websocket'] });
+        socketInstance = io(`${API_URL}`);
         
         socketInstance.on('connect', () => {
           socketInstance.emit('register-user', {
@@ -222,7 +222,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
   const fetchAppointments = async () => {
     setLoadingAppointments(true);
     try {
-      const response = await api.get(`${API_URL}/auth/appointments`);
+      const response = await api.get('/auth/appointments');
       if (response.data && response.data.appointments) {
         setAppointments(response.data.appointments);
       }
@@ -240,7 +240,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
         key = prompt('Please enter the Appointment Verification Key:');
         if (key === null) return; // cancelled
       }
-      await api.put(`${API_URL}/auth/appointments/${appId}/status`, { status, key });
+      await api.put(`/auth/appointments/${appId}/status`, { status, key });
       fetchAppointments();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to update appointment status');
@@ -250,7 +250,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
   const fetchPatients = async () => {
     setLoadingPatients(true);
     try {
-      const response = await api.get(`${API_URL}/auth/patients`);
+      const response = await api.get('/auth/patients');
       if (response.data && response.data.patients) {
         const mapped = response.data.patients.map(p => ({
           id: 'PT-' + p.id,
@@ -274,7 +274,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
 
   const fetchComplianceAlerts = async () => {
     try {
-      const response = await api.get(`${API_URL}/auth/admin/compliance-alerts`);
+      const response = await api.get('/auth/admin/compliance-alerts');
       if (response.data && response.data.complianceAlerts) {
         setComplianceAlerts(response.data.complianceAlerts);
       }
@@ -298,7 +298,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
   const submitScheduleHomeVisit = async () => {
     if (!selectedAlertForVisit || !selectedChwId || !visitDate) return;
     try {
-      const response = await api.post(`${API_URL}/auth/admin/compliance-alerts/${selectedAlertForVisit.id}/schedule-visit`, {
+      const response = await api.post(`/auth/admin/compliance-alerts/${selectedAlertForVisit.id}/schedule-visit`, {
         chwId: selectedChwId,
         reason: visitReason,
         date: visitDate
@@ -373,7 +373,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
   const fetchChws = async () => {
     setLoadingChws(true);
     try {
-      const response = await api.get(`${API_URL}/auth/chws`);
+      const response = await api.get('/auth/chws');
       if (response.data && response.data.chws) {
         setChws(response.data.chws);
       }
@@ -400,7 +400,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
 
     setChwModalLoading(true);
     try {
-      const response = await api.post(`${API_URL}/auth/register-chw`, chwForm);
+      const response = await api.post('/auth/register-chw', chwForm);
       if (response.data && response.data.chw) {
         setChwModalSuccess('Community health worker registered successfully!');
         
@@ -491,7 +491,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
   const fetchStaff = async () => {
     setLoadingStaff(true);
     try {
-      const response = await api.get(`${API_URL}/auth/staff`);
+      const response = await api.get('/auth/staff');
       if (response.data && response.data.staff) {
         setStaff(response.data.staff);
       }
@@ -518,7 +518,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
 
     setStaffModalLoading(true);
     try {
-      const response = await api.post(`${API_URL}/auth/register-staff`, staffForm);
+      const response = await api.post('/auth/register-staff', staffForm);
       if (response.data && response.data.staff) {
         setStaffModalSuccess('Clinical staff member registered successfully!');
         
@@ -592,7 +592,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
   const fetchReferrals = async () => {
     setLoadingReferrals(true);
     try {
-      const response = await api.get(`${API_URL}/auth/referrals`);
+      const response = await api.get('/auth/referrals');
       if (response.data) {
         setReferrals({
           incoming: response.data.incoming || [],
@@ -608,7 +608,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
 
   const fetchOrganizations = async () => {
     try {
-      const response = await api.get(`${API_URL}/auth/organizations`);
+      const response = await api.get('/auth/organizations');
       if (response.data && response.data.organizations) {
         setOrganizationsList(response.data.organizations);
       }
@@ -619,7 +619,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
 
   const fetchOrganizationPatients = async () => {
     try {
-      const response = await api.get(`${API_URL}/auth/organization-patients`);
+      const response = await api.get('/auth/organization-patients');
       if (response.data && response.data.patients) {
         setOrgPatientsList(response.data.patients);
       }
@@ -633,7 +633,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
     setOrgStaffList([]);
     if (!orgName) return;
     try {
-      const response = await api.get(`${API_URL}/auth/organizations/${encodeURIComponent(orgName)}/staff`);
+      const response = await api.get(`/auth/organizations/${encodeURIComponent(orgName)}/staff`);
       if (response.data && response.data.staff) {
         setOrgStaffList(response.data.staff);
       }
@@ -649,7 +649,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
     setReferralModalLoading(true);
 
     try {
-      await api.post(`${API_URL}/auth/referrals`, referralForm);
+      await api.post('/auth/referrals', referralForm);
       setReferralModalSuccess('Referral created successfully!');
       fetchReferrals();
       setReferralForm({
@@ -689,7 +689,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
     try {
       const key = prompt('Please enter the Referral Verification Key:');
       if (key === null) return; // cancelled
-      await api.put(`${API_URL}/auth/referrals/${refId}/status`, { key });
+      await api.put(`/auth/referrals/${refId}/status`, { key });
       fetchReferrals();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to update referral status');
@@ -746,7 +746,7 @@ function Dashboard({ user, onLogout, actionLoading, onUserUpdate }) {
 
     setModalLoading(true);
     try {
-      const response = await api.post(`${API_URL}/auth/register-patient`, patientForm);
+      const response = await api.post('/auth/register-patient', patientForm);
       if (response.data && response.data.patient) {
         setModalSuccess('Patient registered successfully!');
         
