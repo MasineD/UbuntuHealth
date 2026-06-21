@@ -11,7 +11,7 @@ import Home from './pages/home';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 // Configure axios with baseURL and credentials to support HTTP-only cookies
 const api = axios.create({
-  baseURL: `${API_URL}/api`,
+  baseURL: `${API_URL}`,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
