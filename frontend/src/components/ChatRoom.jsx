@@ -113,7 +113,7 @@ function ChatRoom({ user, socket }) {
     const fetchData = async () => {
       setLoadingUsers(true);
       try {
-        const uRes = await api.get('/auth/chat/users');
+        const uRes = await api.get(`${API_URL}/auth/chat/users`);
         setUsersList(uRes.data.users || []);
       } catch (err) {
         console.error('Error fetching chat users:', err);
@@ -123,7 +123,7 @@ function ChatRoom({ user, socket }) {
 
       setLoadingMessages(true);
       try {
-        const mRes = await api.get('/auth/chat/messages');
+        const mRes = await api.get(`${API_URL}/auth/chat/messages`);
         setMessages(mRes.data.messages || []);
       } catch (err) {
         console.error('Error fetching chat messages:', err);
@@ -224,7 +224,7 @@ function ChatRoom({ user, socket }) {
 
     try {
       setNewMessage('');
-      const res = await api.post('/auth/chat/messages', payload);
+      const res = await api.post(`${API_URL}/auth/chat/messages`, payload);
       // The socket broadcast will handle appending it, but let's append it manually if socket is slow/missing
       const savedMsg = res.data.chatMessage;
       setMessages(prev => {
