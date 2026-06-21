@@ -507,7 +507,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
               </button>
               
               {showNotificationsDropdown && (
-                <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-850 rounded-2xl p-4 shadow-2xl text-left animate-slideIn">
+                <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-850 rounded-2xl p-4 shadow-2xl z-50 text-left animate-slideIn">
                   <div className="flex justify-between items-center pb-2.5 border-b border-slate-800">
                     <span className="text-xs font-bold text-slate-200">Alerts & Notifications</span>
                     <button 

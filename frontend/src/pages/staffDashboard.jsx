@@ -627,12 +627,12 @@ function StaffDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
                 <span className="inline-block bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
                   {user.staff_role || 'Staff'}
                 </span>
-                <button
+                {/* <button
                   onClick={() => setIsProfileModalOpen(true)}
                   className="mt-1.5 text-xs text-emerald-400 hover:text-emerald-300 font-semibold underline block text-left transition-colors duration-200"
                 >
                   View Profile
-                </button>
+                </button> */}
               </div>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-800/60 text-[11px] text-slate-500 flex justify-between items-center">
