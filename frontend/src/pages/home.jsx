@@ -62,7 +62,7 @@ function Home({
   useEffect(() => {
     const fetchOrganizations = async () => {
       try {
-        const res = await api.get('/auth/organizations');
+        const res = await api.get(`${API_URL}/auth/organizations`);
         if (res.data && res.data.organizations) {
           setOrganizations(res.data.organizations);
         }
@@ -99,7 +99,7 @@ function Home({
     if (!orgName) return;
 
     try {
-      const res = await api.get(`/auth/organizations/${encodeURIComponent(orgName)}/staff`);
+      const res = await api.get(`${API_URL}/auth/organizations/${encodeURIComponent(orgName)}/staff`);
       if (res.data && res.data.staff) {
         setStaffList(res.data.staff);
       }
