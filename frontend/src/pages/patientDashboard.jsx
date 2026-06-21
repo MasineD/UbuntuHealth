@@ -44,7 +44,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
     setProfileLoading(true);
     setProfileError('');
     try {
-      const res = await api.get('/auth/profile');
+      const res = await api.get(`${API_URL}/auth/profile`);
       if (res.data && res.data.profile) {
         setProfileData(res.data.profile);
         setProfileForm({
@@ -83,7 +83,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
     setProfileError('');
     setProfileSuccess('');
     try {
-      const res = await api.put('/auth/profile', profileForm);
+      const res = await api.put(`${API_URL}/auth/profile`, profileForm);
       if (res.data && res.data.profile) {
         setProfileData(res.data.profile);
         setProfileSuccess('Profile updated successfully!');
@@ -111,7 +111,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
 
     const initSocket = async () => {
       try {
-        const orgRes = await api.get('/auth/my-organization');
+        const orgRes = await api.get(`${API_URL}/auth/my-organization`);
         if (!active) return;
         const orgName = orgRes.data.organization;
         if (!orgName) return;
@@ -220,7 +220,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
   const fetchReferrals = async () => {
     setLoadingReferrals(true);
     try {
-      const response = await api.get('/auth/referrals');
+      const response = await api.get(`${API_URL}/auth/referrals`);
       if (response.data && response.data.incoming) {
         setReferralsList(response.data.incoming); // For patient, all their referrals are returned in incoming
       }
@@ -234,7 +234,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
   const fetchAppointments = async () => {
     setLoadingAppointments(true);
     try {
-      const response = await api.get('/auth/appointments');
+      const response = await api.get(`${API_URL}/auth/appointments`);
       if (response.data && response.data.appointments) {
         setAppointments(response.data.appointments);
       }
@@ -247,7 +247,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
 
   const fetchOrganizations = async () => {
     try {
-      const res = await api.get('/auth/organizations');
+      const res = await api.get(`${API_URL}/auth/organizations`);
       if (res.data && res.data.organizations) {
         setOrganizations(res.data.organizations);
       }
@@ -264,7 +264,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
     if (!orgName) return;
 
     try {
-      const res = await api.get(`/auth/organizations/${encodeURIComponent(orgName)}/staff`);
+      const res = await api.get(`${API_URL}/auth/organizations/${encodeURIComponent(orgName)}/staff`);
       if (res.data && res.data.staff) {
         setStaffList(res.data.staff);
       }
@@ -280,7 +280,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
     setBookingLoading(true);
 
     try {
-      const res = await api.post('/auth/appointments', {
+      const res = await api.post(`${API_URL}/auth/appointments`, {
         fullname: user.name || user.fullname,
         phone_number: user.phone_number,
         ...bookingForm
@@ -320,7 +320,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
 
   const fetchMedicationLogs = async () => {
     try {
-      const response = await api.get('/auth/patients/my-medications');
+      const response = await api.get(`${API_URL}/auth/patients/my-medications`);
       if (response.data && response.data.medicationLogs) {
         setMedicationLogs(response.data.medicationLogs);
       }
@@ -331,7 +331,7 @@ function PatientDashboard({ user, onLogout, actionLoading, onUserUpdate }) {
 
   const handleToggleMedication = async (logId) => {
     try {
-      const response = await api.post(`/auth/patients/my-medications/${logId}/toggle`);
+      const response = await api.post(`${API_URL}/auth/patients/my-medications/${logId}/toggle`);
       if (response.data) {
         setMedicationLogs(prev => prev.map(log => 
           log.id === logId ? { ...log, taken: response.data.taken } : log
