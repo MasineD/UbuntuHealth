@@ -62,7 +62,7 @@ function Home({
   useEffect(() => {
     const fetchOrganizations = async () => {
       try {
-        const res = await api.get(`${API_URL}/auth/organizations`);
+        const res = await api.get('/auth/organizations');
         if (res.data && res.data.organizations) {
           setOrganizations(res.data.organizations);
         }
