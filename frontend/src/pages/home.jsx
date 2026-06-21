@@ -6,8 +6,9 @@ import {
   Sparkles, Eye, EyeOff, LayoutDashboard, HeartPulse, LogOut
 } from 'lucide-react';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: `${API_URL}/api`,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
@@ -121,7 +122,7 @@ function Home({
 
     setBookingLoading(true);
     try {
-      const res = await api.post('/auth/appointments', bookingForm);
+      const res = await api.post(`${API_URL}/auth/appointments`, bookingForm);
       const keyMsg = res.data.appointment?.appointment_key ? ` Verification Key: ${res.data.appointment.appointment_key}` : '';
       setBookingSuccess((res.data.message || 'Appointment requested successfully!') + keyMsg);
       
