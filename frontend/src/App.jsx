@@ -49,7 +49,7 @@ function App() {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const response = await api.get(`${API_URL}/auth/current`);
+        const response = await api.get('/auth/current');
         if (response.data && response.data.user) {
           setUser(response.data.user);
           setAuthMode('dashboard');
@@ -77,7 +77,7 @@ function App() {
 
     setActionLoading(true);
     try {
-      const response = await api.post(`${API_URL}/auth/login`, loginInput);
+      const response = await api.post('/auth/login', loginInput);
       if (response.data && response.data.user) {
         setUser(response.data.user);
         setSuccess('Logged in successfully!');
@@ -109,7 +109,7 @@ function App() {
 
     setActionLoading(true);
     try {
-      const response = await api.post(`${API_URL}/auth/register`, registerInput);
+      const response = await api.post('/auth/register', registerInput);
       if (response.data && response.data.user) {
         setUser(response.data.user);
         setSuccess('Account created successfully!');
@@ -129,7 +129,7 @@ function App() {
   const handleLogout = async () => {
     setActionLoading(true);
     try {
-      await api.post(`${API_URL}/auth/logout`);
+      await api.post('/auth/logout');
       setUser(null);
       setAuthMode('login');
       // Clear inputs
