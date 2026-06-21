@@ -99,7 +99,7 @@ function Home({
     if (!orgName) return;
 
     try {
-      const res = await api.get(`${API_URL}/auth/organizations/${encodeURIComponent(orgName)}/staff`);
+      const res = await api.get(`/auth/organizations/${encodeURIComponent(orgName)}/staff`);
       if (res.data && res.data.staff) {
         setStaffList(res.data.staff);
       }
@@ -122,7 +122,7 @@ function Home({
 
     setBookingLoading(true);
     try {
-      const res = await api.post(`${API_URL}/auth/appointments`, bookingForm);
+      const res = await api.post('/auth/appointments', bookingForm);
       const keyMsg = res.data.appointment?.appointment_key ? ` Verification Key: ${res.data.appointment.appointment_key}` : '';
       setBookingSuccess((res.data.message || 'Appointment requested successfully!') + keyMsg);
       
